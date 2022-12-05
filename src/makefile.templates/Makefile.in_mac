@@ -1,0 +1,54 @@
+
+############################################################
+## MPI parallel and serial versions
+##
+## Gnu Fortran and C compiler and compiler flags
+FC = mpifort
+CC = mpicc
+## Options for optimization and MPI PARALLEL VERSION
+FCFLAGS = -O2 -DUSE_MPI
+## Options for optimization and SERIAL VERSION
+#FCFLAGS = -O2 
+## Options for serial debugging:
+#FCFLAGS = -g -xHost -traceback -fpe:0 -check all
+## Options for debugging and openmp:
+#FCFLAGS = -g -xHost -openmp -traceback -fpe:0 -check all
+#
+## Gnu Fortran compiler and compiler flags for serial and OpenMP
+#FC = gfortran
+#CC = gcc
+##
+## OPTIONS FOR OPTIMIZATION
+#FCFLAGS = -O4 -march=native -funroll-loops
+##FCFLAGS = -O3 -ffast-math -march=native -funroll-loops
+## OPTIONS FOR OPTIMIZATION AND OPENMP
+#FCFLAGS = -O3  -march=native -funroll-loops -fopenmp
+## OPTIONS FOR DEBUGGING
+#FCFLAGS = -g -fbounds-check -fbacktrace
+CCFLAGS = $(FCFLAGS) -DLINUX -DUNDER_
+############################################################
+
+#Linker
+LINK = $(FC)
+# Archiver, for libturbulence.a
+#AR = xiar
+
+
+## PATH TO GOTM TURBULENCE
+GOTMDIR      = $(PWD)/turbulence
+GOTMLIB       =  -L$(GOTMDIR)/lib -lturbulence
+GOTMINCS      = -I$(GOTMDIR)
+
+## PATH TO NETCDF
+NETCDFINC = -I/usr/local/include
+NETCDFLIB = -L/usr/local/lib -lnetcdf -lnetcdff
+
+# METISLIB, only for initialization of MPI domain decomposition
+#METISINC = -I/opt/metis/include
+#METISLIB = /opt/metis/lib/libmetis.a
+
+# NAME OF THE EXECUTABLES
+EXE = fesom_coast.exe
+EXE_INI = fv_ini.x
+
+

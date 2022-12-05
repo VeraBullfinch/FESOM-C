@@ -1,0 +1,82 @@
+!total number of files:
+4
+!=========== Field File Name =================================================================== 
+u.nc
+! If snapshot = 1, averaged needed = 2
+1
+! Type of file 0 - full domain, 3 - station (2,3 does not work yet)
+0
+! Position of station/zoom rect/transect ends, lower left (ll) X, ll Y , ur X, ur Y
+7.9, 54.18833333333333, 4.0, 53.0
+! frequency of output (in time speps)
+120
+! special frequency (not in use)
+0
+! total number of variables in file
+1   
+! list of variables , amount of numbers should not be changed
+2,10,3,8,9,8,9,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+!=========== Field File Name =================================================================== 
+v.nc
+! If snapshot = 1, averaged needed = 2
+1
+! Type of file 0 - full domain, 3 - station (2,3 does not work yet)
+0
+! Position of station/zoom rect/transect ends, lower left (ll) X, ll Y , ur X, ur Y
+7.9, 54.18833333333333, 4.0, 53.0
+! frequency of output (in time speps)
+120
+! special frequency (not in use)
+0
+! total number of variables in file
+1   
+! list of variables , amount of numbers should not be changed
+3,10,3,8,9,8,9,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+!=========== Field File Name =================================================================== 
+eta.nc
+! If snapshot = 1, averaged needed = 2
+1
+! Type of file 0 - full domain, 3 - station (2,3 does not work yet)
+0
+! Position of station/zoom rect/transect ends, lower left (ll) X, ll Y , ur X, ur Y
+7.9, 54.18833333333333, 4.0, 53.0
+! frequency of output (in time speps)
+120
+! special frequency (not in use)
+0
+! total number of variables in file
+1   
+! list of variables , amount of numbers should not be changed
+1,10,3,8,9,8,9,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+!=========== Field File Name =================================================================== 
+t.nc
+! If snapshot = 1, averaged needed = 2
+1
+! Type of file 0 - full domain, 3 - station (2,3 does not work yet)
+0
+! Position of station/zoom rect/transect ends, lower left (ll) X, ll Y , ur X, ur Y
+7.9, 54.18833333333333, 4.0, 53.0
+! frequency of output (in time speps)
+120
+! special frequency (not in use)
+0
+! total number of variables in file
+1   
+! list of variables , amount of numbers should not be changed
+8,10,3,8,9,8,9,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+!=========== Field File Name =================================================================== 
+s.nc
+! If snapshot = 1, averaged needed = 2
+1
+! Type of file 0 - full domain, 3 - station (2,3 does not work yet)
+0
+! Position of station/zoom rect/transect ends, lower left (ll) X, ll Y , ur X, ur Y
+7.9, 54.18833333333333, 4.0, 53.0
+! frequency of output (in time speps)
+100
+! special frequency (not in use)
+0
+! total number of variables in file
+1   
+! list of variables , amount of numbers should not be changed
+9,10,3,8,9,8,9,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0

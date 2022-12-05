@@ -1,0 +1,36 @@
+
+# Gnu Fortran compiler and compiler flags
+FC = gfortran
+CC = gcc
+# Linker
+LINK = $(FC)
+
+## OPTIONS FOR OPTIMIZATION
+# FCFLAGS = -O3 -ffast-math -march=native -funroll-loops
+# CCFLAGS = $(FCFLAGS)
+## OPTIONS FOR OPTIMIZATION AND OPENMP
+# FCFLAGS = -O3 -ffast-math -march=native -funroll-loops -fopenmp
+# CCFLAGS = $(FCFLAGS)
+## OPTIONS FOR DEBUGGING
+FCFLAGS = -g -fbounds-check -fbacktrace
+CCFLAGS =  $(FCFLAGS)
+
+## PATH TO GOTM TURBULENCE
+GOTMDIR      = $(PWD)/turbulence
+GOTMLIB       =  -L$(GOTMDIR)/lib -lturbulence
+GOTMINCS      = -I$(GOTMDIR)
+
+## PATH TO NETCDF
+NETCDFINC = -I/usr/include
+NETCDFLIB = -L/usr/lib -lnetcdff
+## on SGI UV100 at AWI:
+# NETCDFINC = -I/uv/soft/netcdf/3.6.3-gnu/include
+# NETCDFLIB = -L/uv/soft/netcdf/3.6.3-gnu/lib -lnetcdf
+
+# METISLIB, only for initialization of MPI domain decomposition
+METISINC = -I/uv/soft/metis/5.1.0/include
+METISLIB = /uv/soft/metis/5.1.0/lib/libmetis.a
+
+# NAME OF THE EXECUTABLE
+EXE = fv_3d_NS.exe
+EXE_INI = fv_ini.x
