@@ -124,8 +124,8 @@ SUBROUTINE compute_vel_rhs
   !endif
 
   if (filt_3D) call viscosity_filt_3D
-!SH SKIPPED FOR NOW  If (filt_bi_3D) call viscosity_filt2x_3D
-!SH SKIPPED FOR NOW  if (bih_3D) call biharmonic_viscosity
+  if (filt_bi_3D) call viscosity_filt2x_3D
+  if (bih_3D) call biharmonic_viscosity
 
   !===============================
   ! Vertical advection
