@@ -192,8 +192,8 @@
      ssh_rhs(my_in_obn(:))=0.0_WP
 
 !SH THIS BLOCK WAS USED FOR CHILE>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-!!$OMP PARALLEL PRIVATE(n,q)
-!!$OMP DO
+!$OMP PARALLEL PRIVATE(n,q)
+!$OMP DO
 
 
      !SH ADJUST THE DAMPING IF NEEDED
@@ -203,13 +203,13 @@
         n=my_in_obn(i)
         !SH q=i
         q=my_in_obn_idx(i)
-!!$OMP REDUCTION(+:ssh_rhs(n))
+!$OMP REDUCTION(+:ssh_rhs(n))
         do j=1,12
            ssh_rhs(n) = ssh_rhs(n)+damping*ampt(q,j)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(j)*3600._WP) - fazt(q,j))
         end do
      enddo
 !$OMP END DO
-!!$OMP END PARALLEL
+!$OMP END PARALLEL
 !SH THIS BLOCK WAS USED FOR CHILE<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 !SH THIS BLOCK FOR PECHORA>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -226,7 +226,7 @@
 !!$     q=i
 !!$#endif
 
-!!$OMP REDUCTION(+:ssh_rhs(n))
+!$OMP REDUCTION(+:ssh_rhs(n))
          !aa67  do j=1,12
          !aa67     ssh_rhs(n) = ssh_rhs(n)+amA*ampt(q,j)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(j)*3600._WP) - fazt(q,j))
          !aa67  end do
@@ -251,8 +251,8 @@
 !!$
 !!$  enddo
 
-!!$OMP END DO
-!!$OMP END PARALLEL
+!$OMP END DO
+!$OMP END PARALLEL
 !SH THIS BLOCK FOR PECHORA<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 !!$print *,'PECHORA : ',mype,n_dt,minval(ssh_rhs),maxval(ssh_rhs)
