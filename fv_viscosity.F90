@@ -40,7 +40,7 @@ SUBROUTINE h_viscosity
 END subroutine h_viscosity
 ! ===========================================================================
 SUBROUTINE h_viscosity_2D
-  !
+
   ! Coefficient of horizontal viscosity is a combination of 
   ! Smagorinsky contribution (with Smag2)
   ! and background (with A_hor)
@@ -60,7 +60,7 @@ SUBROUTINE h_viscosity_2D
   integer             :: elem
 
   ! Fill in viscosity:
-  DO  elem=1, elem2D
+  DO  elem=1, myDim_elem2D
      acc = sum(w_cv(1:4,elem)*ac(elem2D_nodes(:,elem)))
      A_vel = A_hor !2D*elem_area(elem)/(2.*dt_2D)  !75.*ddd
      d1=vel_grad(1,elem)-vel_grad(4,elem)
@@ -123,7 +123,8 @@ SUBROUTINE biharmonic_viscosity
 
   integer :: edglim
 
-  allocate(U_c(nsigma-1,elem2D), V_c(nsigma-1, elem2D)) 
+  allocate(U_c(nsigma-1,myDim_elem2D+eDim_elem2D+eXDim_elem2D), &
+           V_c(nsigma-1,myDim_elem2D+eDim_elem2D+eXDim_elem2D)) 
 
   !Acall h_viscosity
 
@@ -180,6 +181,9 @@ SUBROUTINE biharmonic_viscosity
 
 #ifdef USE_MPI
 
+  call exchange_elem(U_c) !SH check this
+  call exchange_elem(V_c) !SH check this
+
   DO ed=1,edglim
      if (myList_edge2D(ed)>edge2D_in) then
         el=edge_tri(:,ed)  
@@ -229,365 +233,558 @@ SUBROUTINE biharmonic_viscosity
      V_c(:,elem)=V_c(:,elem)*(Ah) !-Visc(nz,elem))
   END DO
 
+#ifdef USE_MPI
+  call exchange_elem(U_c)
+  call exchange_elem(V_c)
+#endif
+
   call vel_lapl_gradients(U_c, V_c)
 
   ! =============
   ! Apply Laplace operator once more
   ! =============
 
-  DO ed=1, edge2D_in  
-    el=edge_tri(:,ed)
-   xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
-   ye=edge_dxdy(2,ed)*r_earth
+  DO ed=1, edglim
+
+#ifdef USE_MPI
+     if (myList_edge2D(ed)>edge2D_in) cycle
+#endif
+
+     el=edge_tri(:,ed)
+     xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
+     ye=edge_dxdy(2,ed)*r_earth
    
-   tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
-   ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
-   tl=sqrt(tx**2+ty**2)
-   tx=tx/tl
-   ty=ty/tl
-   acc=sum(ac(edge_nodes(:,ed)))/2.0_WP
+     tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
+     ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
+     tl=sqrt(tx**2+ty**2)
+     tx=tx/tl
+     ty=ty/tl
+     acc=sum(ac(edge_nodes(:,ed)))/2.0_WP
    
    
-   DO nz=1, nsigma-1
-   g1=0.5_WP*(vel_grad_ux(nz,el(1))+vel_grad_ux(nz,el(2)))
-   g2=0.5_WP*(vel_grad_uy(nz,el(1))+vel_grad_uy(nz,el(2)))
-   tt=g1*tx+g2*ty-(U_c(nz,el(2))-U_c(nz,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   u1=(g1*ye-g2*xe)
-   g1=0.5_WP*(vel_grad_vx(nz,el(1))+vel_grad_vx(nz,el(2)))
-   g2=0.5_WP*(vel_grad_vy(nz,el(1))+vel_grad_vy(nz,el(2)))
-   tt=g1*tx+g2*ty-(V_c(nz,el(2))-V_c(nz,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   v1=(g1*ye-g2*xe)
+     DO nz=1, nsigma-1
+        g1=0.5_WP*(vel_grad_ux(nz,el(1))+vel_grad_ux(nz,el(2)))
+        g2=0.5_WP*(vel_grad_uy(nz,el(1))+vel_grad_uy(nz,el(2)))
+        tt=g1*tx+g2*ty-(U_c(nz,el(2))-U_c(nz,el(1)))/tl
+        g1=g1-tx*tt
+        g2=g2-ty*tt
+        u1=(g1*ye-g2*xe)
+        g1=0.5_WP*(vel_grad_vx(nz,el(1))+vel_grad_vx(nz,el(2)))
+        g2=0.5_WP*(vel_grad_vy(nz,el(1))+vel_grad_vy(nz,el(2)))
+        tt=g1*tx+g2*ty-(V_c(nz,el(2))-V_c(nz,el(1)))/tl
+        g1=g1-tx*tt
+        g2=g2-ty*tt
+        v1=(g1*ye-g2*xe)
  
-   U_rhs(nz,el(1))=U_rhs(nz,el(1))+u1*Jd(nz,ed)*acc
-   V_rhs(nz,el(1))=V_rhs(nz,el(1))+v1*Jd(nz,ed)*acc
-   U_rhs(nz,el(2))=U_rhs(nz,el(2))-u1*Jd(nz,ed)*acc
-   V_rhs(nz,el(2))=V_rhs(nz,el(2))-v1*Jd(nz,ed)*acc
+        U_rhs(nz,el(1))=U_rhs(nz,el(1))+u1*Jd(nz,ed)*acc
+        V_rhs(nz,el(1))=V_rhs(nz,el(1))+v1*Jd(nz,ed)*acc
+        U_rhs(nz,el(2))=U_rhs(nz,el(2))-u1*Jd(nz,ed)*acc
+        V_rhs(nz,el(2))=V_rhs(nz,el(2))-v1*Jd(nz,ed)*acc
    
-   END DO
-END DO
+     END DO
+  END DO
 
-! ============ 
-! Contribution from boundary edges
-! ============
- DO ed=1+edge2D_in, edge2D
-   el=edge_tri(:,ed)
-   xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
-   ye=edge_dxdy(2,ed)*r_earth
-   acc = sum(ac(edge_nodes(:,ed)))/2.0_WP
+  ! ============ 
+  ! Contribution from boundary edges
+  ! ============
+
+#ifdef USE_MPI
+
+  call exchange_elem(U_rhs) !SH check this
+  call exchange_elem(V_rhs) !SH check this
+
+  DO ed=1,edglim
+     if (myList_edge2D(ed)>edge2D_in) then
+
+        el=edge_tri(:,ed)
+        xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
+        ye=edge_dxdy(2,ed)*r_earth
+        acc = sum(ac(edge_nodes(:,ed)))/2.0_WP
    
 
-   DO nz=1, nsigma-1
-   u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
-   v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
-   U_rhs(nz,el(1))=U_rhs(nz,el(1))+u1*Jd(nz,ed)*acc
-   V_rhs(nz,el(1))=V_rhs(nz,el(1))+v1*Jd(nz,ed)*acc
-   END DO
-END DO
-deallocate(V_c, U_c)
+        DO nz=1, nsigma-1
+           u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
+           v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
+           U_rhs(nz,el(1))=U_rhs(nz,el(1))+u1*Jd(nz,ed)*acc
+           V_rhs(nz,el(1))=V_rhs(nz,el(1))+v1*Jd(nz,ed)*acc
+        END DO
+
+     end if
+  END DO  
+
+  call exchange_elem(U_rhs)
+  call exchange_elem(V_rhs)
+
+#else
+
+  DO ed=1+edge2D_in, edge2D
+
+     el=edge_tri(:,ed)
+     xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
+     ye=edge_dxdy(2,ed)*r_earth
+     acc = sum(ac(edge_nodes(:,ed)))/2.0_WP
+   
+
+     DO nz=1, nsigma-1
+        u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
+        v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
+        U_rhs(nz,el(1))=U_rhs(nz,el(1))+u1*Jd(nz,ed)*acc
+        V_rhs(nz,el(1))=V_rhs(nz,el(1))+v1*Jd(nz,ed)*acc
+     END DO
+  END DO
+
+#endif
+
+  deallocate(V_c, U_c)
+
 END subroutine biharmonic_viscosity
+
 ! =========================================================================
 ! compute biharmonic diffusion for 2D velocity
 !
 SUBROUTINE biharmonic_2D
-USE o_MESH
-USE o_ARRAYS
-USE o_PARAM
-IMPLICIT NONE
 
-real(kind=WP)  :: xe, ye, u1, v1, xed
-real(kind=WP)  :: Ah, tl, tt, tx, ty, g1, g2, acc !, fD(4)
-real(kind=WP), allocatable :: Ul(:,:)
-integer              :: ed, el(2),elem, elnodes(4)
- 
- ! This routine applies twice viscosity2
- 
- allocate(Ul(2,elem2D))
- Ul=0.0_WP
- ! =================
- ! Compute Laplacian of velocity
- ! =================
- DO  ed=1,edge2D_in 
-   el=edge_tri(:,ed)
-   xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
-   ye=edge_dxdy(2,ed)*r_earth
+  USE o_MESH
+  USE o_ARRAYS
+  USE o_PARAM
 
-   tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
-   ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
-   tl=sqrt(tx**2+ty**2)
-   tx=tx/tl
-   ty=ty/tl   ! this is the vector of normal to the edge 
-   
-   g1=0.5_WP*(vel_grad(1,el(1))+vel_grad(1,el(2)))
-   g2=0.5_WP*(vel_grad(2,el(1))+vel_grad(2,el(2)))
-   tt=g1*tx+g2*ty-(UAB(1,el(2))-UAB(1,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   u1=(g1*ye-g2*xe)
-   g1=0.5_WP*(vel_grad(3,el(1))+vel_grad(3,el(2)))
-   g2=0.5_WP*(vel_grad(4,el(1))+vel_grad(4,el(2)))
-   tt=g1*tx+g2*ty-(UAB(2,el(2))-UAB(2,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   v1=(g1*ye-g2*xe)
-   
-   Ul(1,el(1))=Ul(1,el(1))+u1
-   Ul(2,el(1))=Ul(2,el(1))+v1
-   Ul(1,el(2))=Ul(1,el(2))-u1
-   Ul(2,el(2))=Ul(2,el(2))-v1
- END DO
- DO ed=1+edge2D_in,edge2D 
-   el=edge_tri(:,ed)
-   xe=edge_dxdy(1,ed)*r_earth
-   xed=xe*elem_cos(el(1)) 
-   ye=edge_dxdy(2,ed)*r_earth
-   u1=(vel_grad(1,el(1)))*ye-(vel_grad(2,el(1)))*xed
-   v1=(vel_grad(3,el(1)))*ye-(vel_grad(4,el(1)))*xed
+  use g_parsup
+  use g_comm_auto
+
+  IMPLICIT NONE
+
+  real(kind=WP)  :: xe, ye, u1, v1, xed
+  real(kind=WP)  :: Ah, tl, tt, tx, ty, g1, g2, acc !, fD(4)
+  real(kind=WP), allocatable :: Ul(:,:)
+  integer              :: ed, el(2),elem, elnodes(4)
   
-   if (free_slip) then
- !   remove tangent component
- !   Projection; division because xe, ye are not normalized
-   u1=ye*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
-   v1=-xe*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
-   end if
-   Ul(1,el(1))=Ul(1,el(1))+u1
-   Ul(2,el(1))=Ul(2,el(1))+v1
- END DO
+  integer :: edglim
+
+  ! This routine applies twice viscosity2
+ 
+  allocate(Ul(2,myDim_elem2D+eDim_elem2D+eXDim_elem2D))
+  Ul=0.0_WP
+
+  ! =================
+  ! Compute Laplacian of velocity
+  ! =================
+
+#ifdef USE_MPI
+  edglim=myDim_edge2D+eDim_edge2D
+#else
+  edglim=edge2D_in
+#endif
+
+  DO  ed=1,edglim
+
+#ifdef USE_MPI
+     if (myList_edge2D(ed)>edge2D_in) cycle
+#endif
+
+     el=edge_tri(:,ed)
+     xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
+     ye=edge_dxdy(2,ed)*r_earth
+
+     tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
+     ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
+     tl=sqrt(tx**2+ty**2)
+     tx=tx/tl
+     ty=ty/tl   ! this is the vector of normal to the edge 
+   
+     g1=0.5_WP*(vel_grad(1,el(1))+vel_grad(1,el(2)))
+     g2=0.5_WP*(vel_grad(2,el(1))+vel_grad(2,el(2)))
+     tt=g1*tx+g2*ty-(UAB(1,el(2))-UAB(1,el(1)))/tl
+     g1=g1-tx*tt
+     g2=g2-ty*tt
+     u1=(g1*ye-g2*xe)
+     g1=0.5_WP*(vel_grad(3,el(1))+vel_grad(3,el(2)))
+     g2=0.5_WP*(vel_grad(4,el(1))+vel_grad(4,el(2)))
+     tt=g1*tx+g2*ty-(UAB(2,el(2))-UAB(2,el(1)))/tl
+     g1=g1-tx*tt
+     g2=g2-ty*tt
+     v1=(g1*ye-g2*xe)
+   
+     Ul(1,el(1))=Ul(1,el(1))+u1
+     Ul(2,el(1))=Ul(2,el(1))+v1
+     Ul(1,el(2))=Ul(1,el(2))-u1
+     Ul(2,el(2))=Ul(2,el(2))-v1
+
+  END DO
+
+
+#ifdef USE_MPI
+
+  call exchange_elem(Ul) !SH check this
+
+  DO ed=1,edglim
+     if (myList_edge2D(ed)>edge2D_in) then
+
+        el=edge_tri(:,ed)
+        xe=edge_dxdy(1,ed)*r_earth
+        xed=xe*elem_cos(el(1)) 
+        ye=edge_dxdy(2,ed)*r_earth
+        u1=(vel_grad(1,el(1)))*ye-(vel_grad(2,el(1)))*xed
+        v1=(vel_grad(3,el(1)))*ye-(vel_grad(4,el(1)))*xed
+  
+        if (free_slip) then
+           !   remove tangent component
+           !   Projection; division because xe, ye are not normalized
+           u1=ye*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
+           v1=-xe*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
+        end if
+
+        Ul(1,el(1))=Ul(1,el(1))+u1
+        Ul(2,el(1))=Ul(2,el(1))+v1
+
+     end if
+  END DO  
+
+  call exchange_elem(Ul)
+
+#else
+
+  DO ed=1+edge2D_in,edge2D 
+
+     el=edge_tri(:,ed)
+     xe=edge_dxdy(1,ed)*r_earth
+     xed=xe*elem_cos(el(1)) 
+     ye=edge_dxdy(2,ed)*r_earth
+     u1=(vel_grad(1,el(1)))*ye-(vel_grad(2,el(1)))*xed
+     v1=(vel_grad(3,el(1)))*ye-(vel_grad(4,el(1)))*xed
+  
+     if (free_slip) then
+        !   remove tangent component
+        !   Projection; division because xe, ye are not normalized
+        u1=ye*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
+        v1=-xe*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
+     end if
+
+     Ul(1,el(1))=Ul(1,el(1))+u1
+     Ul(2,el(1))=Ul(2,el(1))+v1
+
+  END DO
+
+#endif
 
   !call h_viscosity
- ! =============  
- ! Multiply with biharmonic viscosity
- ! =============
- call h_viscosity_2D
- DO elem=1,elem2D
+
+  ! =============  
+  ! Multiply with biharmonic viscosity
+  ! =============
+
+  call h_viscosity_2D
+ 
+  DO elem=1,myDim_elem2D
      elnodes=elem2D_nodes(:,elem)
      acc = sum(w_cv(1:4,elem)*ac(elnodes))
      Ah=-Abh0*sqrt(elem_area(elem)/scale_area)/scale_area
- !a    Ah=Ah*max(1.0_WP, sum(depth(elnodes))/4.0_WP)
-    !  fD=depth(elnodes)
-    ! Ah=Ah*max(1.0_8, sum(w_cv(1:4,elem)*fD))
+     !a    Ah=Ah*max(1.0_WP, sum(depth(elnodes))/4.0_WP)
+     !  fD=depth(elnodes)
+     ! Ah=Ah*max(1.0_8, sum(w_cv(1:4,elem)*fD))
      Ul(:,elem)=Ul(:,elem)*(Ah)*acc !-Visc2D(elem))
- END DO
+  END DO
+
+#ifdef USE_MPI
+  call exchange_elem(Ul)
+#endif
+
   call vel_gradients_2D(Ul)
+
   ! ===============
- ! Apply Laplacian second time
- ! =============== 
- DO  ed=1,edge2D_in 
-   el=edge_tri(:,ed)
+  ! Apply Laplacian second time
+  ! =============== 
+
+  DO  ed=1,edglim
+
+#ifdef USE_MPI
+     if (myList_edge2D(ed)>edge2D_in) cycle
+#endif
+
+     el=edge_tri(:,ed)
+     
+     xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
+     ye=edge_dxdy(2,ed)*r_earth
+     tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
+     ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
+     tl=sqrt(tx**2+ty**2)
+     tx=tx/tl
+     ty=ty/tl    ! this is the vector of normal to the edge 
    
-   xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
-   ye=edge_dxdy(2,ed)*r_earth
-   tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
-   ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
-   tl=sqrt(tx**2+ty**2)
-   tx=tx/tl
-   ty=ty/tl    ! this is the vector of normal to the edge 
+     g1=0.5_WP*(vel_grad(1,el(1))+vel_grad(1,el(2)))
+     g2=0.5_WP*(vel_grad(2,el(1))+vel_grad(2,el(2)))
+     tt=g1*tx+g2*ty-(Ul(1,el(2))-Ul(1,el(1)))/tl
+     g1=g1-tx*tt
+     g2=g2-ty*tt
+     u1=(g1*ye-g2*xe)
+     g1=0.5_WP*(vel_grad(3,el(1))+vel_grad(3,el(2)))
+     g2=0.5_WP*(vel_grad(4,el(1))+vel_grad(4,el(2)))
+     tt=g1*tx+g2*ty-(Ul(2,el(2))-Ul(2,el(1)))/tl
+     g1=g1-tx*tt
+     g2=g2-ty*tt
+     v1=(g1*ye-g2*xe)
    
-   g1=0.5_WP*(vel_grad(1,el(1))+vel_grad(1,el(2)))
-   g2=0.5_WP*(vel_grad(2,el(1))+vel_grad(2,el(2)))
-   tt=g1*tx+g2*ty-(Ul(1,el(2))-Ul(1,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   u1=(g1*ye-g2*xe)
-   g1=0.5_WP*(vel_grad(3,el(1))+vel_grad(3,el(2)))
-   g2=0.5_WP*(vel_grad(4,el(1))+vel_grad(4,el(2)))
-   tt=g1*tx+g2*ty-(Ul(2,el(2))-Ul(2,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   v1=(g1*ye-g2*xe)
+     U_rhs_2D(1,el(1))=U_rhs_2D(1,el(1))+u1
+     U_rhs_2D(2,el(1))=U_rhs_2D(2,el(1))+v1
+     U_rhs_2D(1,el(2))=U_rhs_2D(1,el(2))-u1
+     U_rhs_2D(2,el(2))=U_rhs_2D(2,el(2))-v1
+  END DO
+
+
+#ifdef USE_MPI
+
+  call exchange_elem(U_rhs_2D) !SH check this
+
+  DO ed=1,edglim
+     if (myList_edge2D(ed)>edge2D_in) then
+
+        el=edge_tri(:,ed)
+        xe=edge_dxdy(1,ed)*r_earth
+        xed=xe*elem_cos(el(1)) 
+        ye=edge_dxdy(2,ed)*r_earth
+        u1=(vel_grad(1,el(1)))*ye-(vel_grad(2,el(1)))*xed
+        v1=(vel_grad(3,el(1)))*ye-(vel_grad(4,el(1)))*xed
+        if (free_slip) then
+           ! remove tangent component
+           ! Projection; division because xe, ye are not normalized
+           u1=ye*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
+           v1=-xe*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
+        end if
    
-   U_rhs_2D(1,el(1))=U_rhs_2D(1,el(1))+u1
-   U_rhs_2D(2,el(1))=U_rhs_2D(2,el(1))+v1
-   U_rhs_2D(1,el(2))=U_rhs_2D(1,el(2))-u1
-   U_rhs_2D(2,el(2))=U_rhs_2D(2,el(2))-v1
- END DO
- DO ed=1+edge2D_in,edge2D 
-   el=edge_tri(:,ed)
-   xe=edge_dxdy(1,ed)*r_earth
-   xed=xe*elem_cos(el(1)) 
-   ye=edge_dxdy(2,ed)*r_earth
-   u1=(vel_grad(1,el(1)))*ye-(vel_grad(2,el(1)))*xed
-   v1=(vel_grad(3,el(1)))*ye-(vel_grad(4,el(1)))*xed
-   if (free_slip) then
-   ! remove tangent component
-   ! Projection; division because xe, ye are not normalized
-   u1=ye*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
-   v1=-xe*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
-   end if
+        U_rhs_2D(1,el(1))=U_rhs_2D(1,el(1))+u1
+        U_rhs_2D(2,el(1))=U_rhs_2D(2,el(1))+v1
+
+     end if
+  END DO  
+
+  call exchange_elem(U_rhs_2D)
+
+#else
+
+  DO ed=1+edge2D_in,edge2D 
+     el=edge_tri(:,ed)
+     xe=edge_dxdy(1,ed)*r_earth
+     xed=xe*elem_cos(el(1)) 
+     ye=edge_dxdy(2,ed)*r_earth
+     u1=(vel_grad(1,el(1)))*ye-(vel_grad(2,el(1)))*xed
+     v1=(vel_grad(3,el(1)))*ye-(vel_grad(4,el(1)))*xed
+     if (free_slip) then
+        ! remove tangent component
+        ! Projection; division because xe, ye are not normalized
+        u1=ye*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
+        v1=-xe*(u1*ye-v1*xe)/(xe*xe+ye*ye) 
+     end if
    
-   U_rhs_2D(1,el(1))=U_rhs_2D(1,el(1))+u1
-   U_rhs_2D(2,el(1))=U_rhs_2D(2,el(1))+v1
- END DO 
- deallocate(Ul)
+     U_rhs_2D(1,el(1))=U_rhs_2D(1,el(1))+u1
+     U_rhs_2D(2,el(1))=U_rhs_2D(2,el(1))+v1
+  END DO
+
+#endif
+
+  deallocate(Ul)
+  
 end subroutine biharmonic_2D
 ! ===================================================================
 SUBROUTINE viscosity_filt2x_3D
-USE o_MESH
-USE o_ARRAYS
-USE o_PARAM
 
-IMPLICIT NONE
+  USE o_MESH
+  USE o_ARRAYS
+  USE o_PARAM
 
-integer         :: el, eln(4), nz
-real(kind=WP)   :: tau_inv, K_bi
-real(kind=WP)   :: U_c(nsigma-1,elem2D), V_c(nsigma-1,elem2D)
+  use g_parsup
+  use g_comm_auto
 
-!tau_c = 0.4_WP  ! 0.4_WP
-tau_inv=dt*tau_c/3600.0/24     ! SET IT experimentally
+  IMPLICIT NONE
 
- ! Filter is applied twice. It should be approximately
- ! equivalent to biharmonic operator with the coefficient
- ! (tau_c/day)a^3/9. Scaling inside is found to help
- ! with smoothness in places of mesh transition. *(it makes a^3 from a^4)
+  integer         :: el, eln(4), nz
+  real(kind=WP)   :: tau_inv, K_bi
+  real(kind=WP)   :: U_c(nsigma-1,myDim_elem2D+eDim_elem2D+eXDim_elem2D)
+  real(kind=WP)   :: V_c(nsigma-1,myDim_elem2D+eDim_elem2D+eXDim_elem2D)
+
+  !tau_c = 0.4_WP  ! 0.4_WP
+  tau_inv=dt*tau_c/3600.0/24     ! SET IT experimentally
+
+  ! Filter is applied twice. It should be approximately
+  ! equivalent to biharmonic operator with the coefficient
+  ! (tau_c/day)a^3/9. Scaling inside is found to help
+  ! with smoothness in places of mesh transition. *(it makes a^3 from a^4)
 
 !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(el,eln,nz,K_bi)
 !$OMP DO
-DO el=1,elem2D
-   K_bi = tau_inv*sqrt(scale_area/elem_area(el))
+  DO el=1,myDim_elem2D
+     K_bi = tau_inv*sqrt(scale_area/elem_area(el))
 
-   eln(1:4) = elem_neighbors(1:4,el)
-
-   if ( eln(1) > 0) then
-      DO nz=1,nsigma-1
-         U_c(nz,el) =           U_n(nz,el)*Je(nz,el) - U_n(nz,eln(1))*Je(nz,eln(1))
-         V_c(nz,el) =           V_n(nz,el)*Je(nz,el) - V_n(nz,eln(1))*Je(nz,eln(1))
-      END DO
-   else
-      U_c(1:nsigma-1,el) = 0._WP
-      V_c(1:nsigma-1,el) = 0._WP      
-   endif
-   if ( eln(2) > 0) then
-      DO nz=1,nsigma-1
-         U_c(nz,el) = U_c(nz,el) + U_n(nz,el)*Je(nz,el) - U_n(nz,eln(2))*Je(nz,eln(2))
-         V_c(nz,el) = V_c(nz,el) + V_n(nz,el)*Je(nz,el) - V_n(nz,eln(2))*Je(nz,eln(2))
-      END DO
-   endif
-   if ( eln(3) > 0) then
-      DO nz=1,nsigma-1
-         U_c(nz,el) = U_c(nz,el) + U_n(nz,el)*Je(nz,el) - U_n(nz,eln(3))*Je(nz,eln(3))
-         V_c(nz,el) = V_c(nz,el) + V_n(nz,el)*Je(nz,el) - V_n(nz,eln(3))*Je(nz,eln(3))
-      END DO
-   endif
-   if ( eln(4) > 0  .and. eln(4)/=eln(1)) then
-      DO nz=1,nsigma-1
-         U_c(nz,el) = U_c(nz,el) + U_n(nz,el)*Je(nz,el) - U_n(nz,eln(4))*Je(nz,eln(4))
-         V_c(nz,el) = V_c(nz,el) + V_n(nz,el)*Je(nz,el) - V_n(nz,eln(4))*Je(nz,eln(4))
-      END DO
-   endif
+     eln(1:4) = elem_neighbors(1:4,el)
+     
+     if ( eln(1) > 0) then
+        DO nz=1,nsigma-1
+           U_c(nz,el) =           U_n(nz,el)*Je(nz,el) - U_n(nz,eln(1))*Je(nz,eln(1))
+           V_c(nz,el) =           V_n(nz,el)*Je(nz,el) - V_n(nz,eln(1))*Je(nz,eln(1))
+        END DO
+     else
+        U_c(1:nsigma-1,el) = 0._WP
+        V_c(1:nsigma-1,el) = 0._WP      
+     endif
+     if ( eln(2) > 0) then
+        DO nz=1,nsigma-1
+           U_c(nz,el) = U_c(nz,el) + U_n(nz,el)*Je(nz,el) - U_n(nz,eln(2))*Je(nz,eln(2))
+           V_c(nz,el) = V_c(nz,el) + V_n(nz,el)*Je(nz,el) - V_n(nz,eln(2))*Je(nz,eln(2))
+        END DO
+     endif
+     if ( eln(3) > 0) then
+        DO nz=1,nsigma-1
+           U_c(nz,el) = U_c(nz,el) + U_n(nz,el)*Je(nz,el) - U_n(nz,eln(3))*Je(nz,eln(3))
+           V_c(nz,el) = V_c(nz,el) + V_n(nz,el)*Je(nz,el) - V_n(nz,eln(3))*Je(nz,eln(3))
+        END DO
+     endif
+     if ( eln(4) > 0  .and. eln(4)/=eln(1)) then
+        DO nz=1,nsigma-1
+           U_c(nz,el) = U_c(nz,el) + U_n(nz,el)*Je(nz,el) - U_n(nz,eln(4))*Je(nz,eln(4))
+           V_c(nz,el) = V_c(nz,el) + V_n(nz,el)*Je(nz,el) - V_n(nz,eln(4))*Je(nz,eln(4))
+        END DO
+     endif
    
-   U_c(1:nsigma-1,el) = U_c(1:nsigma-1,el)*K_bi
-   V_c(1:nsigma-1,el) = V_c(1:nsigma-1,el)*K_bi
-ENDDO
+     U_c(1:nsigma-1,el) = U_c(1:nsigma-1,el)*K_bi
+     V_c(1:nsigma-1,el) = V_c(1:nsigma-1,el)*K_bi
+  ENDDO
 !$OMP END DO
-!$OMP DO
-DO el=1,elem2D
-   eln(1:4) = elem_neighbors(1:4,el)
 
-   if ( eln(1) > 0) then
-      UV_rhs(1,1:nsigma-1,el) =               - U_c(1:nsigma-1,el) + U_c(1:nsigma-1,eln(1))
-      UV_rhs(2,1:nsigma-1,el) =               - V_c(1:nsigma-1,el) + V_c(1:nsigma-1,eln(1))
-   else
-      UV_rhs(1:2,1:nsigma-1,el) = 0._WP
-   endif
-   if ( eln(2) > 0) then
-      UV_rhs(1,1:nsigma-1,el) = UV_rhs(1,1:nsigma-1,el) - U_c(1:nsigma-1,el) + U_c(1:nsigma-1,eln(2))
-      UV_rhs(2,1:nsigma-1,el) = UV_rhs(2,1:nsigma-1,el) - V_c(1:nsigma-1,el) + V_c(1:nsigma-1,eln(2))
-   endif
-   if ( eln(3) > 0) then
-      UV_rhs(1,1:nsigma-1,el) = UV_rhs(1,1:nsigma-1,el) - U_c(1:nsigma-1,el) + U_c(1:nsigma-1,eln(3))
-      UV_rhs(2,1:nsigma-1,el) = UV_rhs(2,1:nsigma-1,el) - V_c(1:nsigma-1,el) + V_c(1:nsigma-1,eln(3))
-   endif
-   if ( eln(4) > 0  .and. eln(4)/=eln(1)) then
-      UV_rhs(1,1:nsigma-1,el) = UV_rhs(1,1:nsigma-1,el) - U_c(1:nsigma-1,el) + U_c(1:nsigma-1,eln(4))
-      UV_rhs(2,1:nsigma-1,el) = UV_rhs(2,1:nsigma-1,el) - V_c(1:nsigma-1,el) + V_c(1:nsigma-1,eln(4))
-   endif
+#ifdef USE_MPI
+  call exchange_elem(U_c)
+  call exchange_elem(V_c)
+#endif
+
+
+!$OMP DO
+  DO el=1,myDim_elem2D
+     eln(1:4) = elem_neighbors(1:4,el)
+
+     if ( eln(1) > 0) then
+        UV_rhs(1,1:nsigma-1,el) =               - U_c(1:nsigma-1,el) + U_c(1:nsigma-1,eln(1))
+        UV_rhs(2,1:nsigma-1,el) =               - V_c(1:nsigma-1,el) + V_c(1:nsigma-1,eln(1))
+     else
+        UV_rhs(1:2,1:nsigma-1,el) = 0._WP
+     endif
+     if ( eln(2) > 0) then
+        UV_rhs(1,1:nsigma-1,el) = UV_rhs(1,1:nsigma-1,el) - U_c(1:nsigma-1,el) + U_c(1:nsigma-1,eln(2))
+        UV_rhs(2,1:nsigma-1,el) = UV_rhs(2,1:nsigma-1,el) - V_c(1:nsigma-1,el) + V_c(1:nsigma-1,eln(2))
+     endif
+     if ( eln(3) > 0) then
+        UV_rhs(1,1:nsigma-1,el) = UV_rhs(1,1:nsigma-1,el) - U_c(1:nsigma-1,el) + U_c(1:nsigma-1,eln(3))
+        UV_rhs(2,1:nsigma-1,el) = UV_rhs(2,1:nsigma-1,el) - V_c(1:nsigma-1,el) + V_c(1:nsigma-1,eln(3))
+     endif
+     if ( eln(4) > 0  .and. eln(4)/=eln(1)) then
+        UV_rhs(1,1:nsigma-1,el) = UV_rhs(1,1:nsigma-1,el) - U_c(1:nsigma-1,el) + U_c(1:nsigma-1,eln(4))
+        UV_rhs(2,1:nsigma-1,el) = UV_rhs(2,1:nsigma-1,el) - V_c(1:nsigma-1,el) + V_c(1:nsigma-1,eln(4))
+     endif
  
-ENDDO
+  ENDDO
 !$OMP END DO
 !$OMP END PARALLEL
  
+#ifdef USE_MPI
+  call exchange_elem(UV_rhs) !SH Size of the array correct order?
+#endif
+
 end subroutine viscosity_filt2x_3D
+
 !=======================================================================
+
 SUBROUTINE viscosity_filt2x_2D
-USE o_MESH
-USE o_ARRAYS
-USE o_PARAM
 
-IMPLICIT NONE
+  USE o_MESH
+  USE o_ARRAYS
+  USE o_PARAM
 
-real(kind=WP) :: tau_inv, K_bi, u1, v1
-real(kind=WP) :: U_c(elem2D), V_c(elem2D)
+  use g_parsup
+  use g_comm_auto
 
-integer       :: els(2), ed, el
+  IMPLICIT NONE
+
+  real(kind=WP) :: tau_inv, K_bi, u1, v1
+  real(kind=WP)   :: U_c(myDim_elem2D+eDim_elem2D+eXDim_elem2D)
+  real(kind=WP)   :: V_c(myDim_elem2D+eDim_elem2D+eXDim_elem2D)
+
+
+  integer       :: els(2), ed, el
  
- ! Filter is applied twice. It should be approximately
- ! equivalent to biharmonic operator with the coefficient
- ! (tau_c/day)a^3/9. Scaling inside is found to help
- ! with smoothness in places of mesh transition. *(it makes a^3 from a^4)
+  ! Filter is applied twice. It should be approximately
+  ! equivalent to biharmonic operator with the coefficient
+  ! (tau_c/day)a^3/9. Scaling inside is found to help
+  ! with smoothness in places of mesh transition. *(it makes a^3 from a^4)
  
-! tau_c = 0.4_WP ! 0.4_WP
- tau_inv=dt_2D*tau_c/3600.0/24.0     ! SET IT experimentally
+  ! tau_c = 0.4_WP ! 0.4_WP
+  tau_inv=dt_2D*tau_c/3600.0/24.0     ! SET IT experimentally
 
-!NROMP  A more compact data structure would be nice with
-!NROMP  direct access to the "non-virtual" neighbors.
-!NROMP  However, here is not the crucial part for computation time.
+  !NROMP  A more compact data structure would be nice with
+  !NROMP  direct access to the "non-virtual" neighbors.
+  !NROMP  However, here is not the crucial part for computation time.
 
 !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(el,K_bi)
 !$OMP DO
-DO el=1,elem2D
-   U_c(el) = 0._WP
-   V_c(el) = 0._WP
-   K_bi = tau_inv*sqrt(scale_area/elem_area(el))
+  DO el=1,myDim_elem2D
 
-   if ( elem_neighbors(1,el) > 0) then
-      U_c(el) =           U_n_2D(1,el) - U_n_2D(1,elem_neighbors(1,el))
-      V_c(el) =           U_n_2D(2,el) - U_n_2D(2,elem_neighbors(1,el))
-   endif
-   if ( elem_neighbors(2,el) > 0) then
-      U_c(el) = U_c(el) + U_n_2D(1,el) - U_n_2D(1,elem_neighbors(2,el))
-      V_c(el) = V_c(el) + U_n_2D(2,el) - U_n_2D(2,elem_neighbors(2,el))
-   endif
-   if ( elem_neighbors(3,el) > 0) then
-      U_c(el) = U_c(el) + U_n_2D(1,el) - U_n_2D(1,elem_neighbors(3,el))
-      V_c(el) = V_c(el) + U_n_2D(2,el) - U_n_2D(2,elem_neighbors(3,el))
-   endif
-   if ( elem_neighbors(4,el) > 0  .and. elem_neighbors(4,el)/=elem_neighbors(1,el)) then
-      U_c(el) = U_c(el) + U_n_2D(1,el) - U_n_2D(1,elem_neighbors(4,el))
-      V_c(el) = V_c(el) + U_n_2D(2,el) - U_n_2D(2,elem_neighbors(4,el))
-   endif
+     U_c(el) = 0._WP
+     V_c(el) = 0._WP
+
+     K_bi = tau_inv*sqrt(scale_area/elem_area(el))
+
+     if ( elem_neighbors(1,el) > 0) then
+        U_c(el) =           U_n_2D(1,el) - U_n_2D(1,elem_neighbors(1,el))
+        V_c(el) =           U_n_2D(2,el) - U_n_2D(2,elem_neighbors(1,el))
+     endif
+     if ( elem_neighbors(2,el) > 0) then
+        U_c(el) = U_c(el) + U_n_2D(1,el) - U_n_2D(1,elem_neighbors(2,el))
+        V_c(el) = V_c(el) + U_n_2D(2,el) - U_n_2D(2,elem_neighbors(2,el))
+     endif
+     if ( elem_neighbors(3,el) > 0) then
+        U_c(el) = U_c(el) + U_n_2D(1,el) - U_n_2D(1,elem_neighbors(3,el))
+        V_c(el) = V_c(el) + U_n_2D(2,el) - U_n_2D(2,elem_neighbors(3,el))
+     endif
+     if ( elem_neighbors(4,el) > 0  .and. elem_neighbors(4,el)/=elem_neighbors(1,el)) then
+        U_c(el) = U_c(el) + U_n_2D(1,el) - U_n_2D(1,elem_neighbors(4,el))
+        V_c(el) = V_c(el) + U_n_2D(2,el) - U_n_2D(2,elem_neighbors(4,el))
+     endif
    
-   U_c(el) = U_c(el)*K_bi
-   V_c(el) = V_c(el)*K_bi
-ENDDO
+     U_c(el) = U_c(el)*K_bi
+     V_c(el) = V_c(el)*K_bi
+  ENDDO
 !$OMP END DO
-!$OMP DO
-DO el=1,elem2D
-   UV2_rhs(1,el) = 0._WP
-   UV2_rhs(2,el) = 0._WP
 
-   if ( elem_neighbors(1,el) > 0) then
-      UV2_rhs(1,el) =               - U_c(el) + U_c(elem_neighbors(1,el))
-      UV2_rhs(2,el) =               - V_c(el) + V_c(elem_neighbors(1,el))
-   endif
-   if ( elem_neighbors(2,el) > 0) then
-      UV2_rhs(1,el) = UV2_rhs(1,el) - U_c(el) + U_c(elem_neighbors(2,el))
-      UV2_rhs(2,el) = UV2_rhs(2,el) - V_c(el) + V_c(elem_neighbors(2,el))
-   endif
-   if ( elem_neighbors(3,el) > 0) then
-      UV2_rhs(1,el) = UV2_rhs(1,el) - U_c(el) + U_c(elem_neighbors(3,el))
-      UV2_rhs(2,el) = UV2_rhs(2,el) - V_c(el) + V_c(elem_neighbors(3,el))
-   endif
-   if ( elem_neighbors(4,el) > 0  .and. elem_neighbors(4,el)/=elem_neighbors(1,el)) then
-      UV2_rhs(1,el) = UV2_rhs(1,el) - U_c(el) + U_c(elem_neighbors(4,el))
-      UV2_rhs(2,el) = UV2_rhs(2,el) - V_c(el) + V_c(elem_neighbors(4,el))
-   endif
+#ifdef USE_MPI
+  call exchange_elem(U_c)
+  call exchange_elem(V_c)
+#endif
+
+!$OMP DO
+  DO el=1,myDim_elem2D
+     UV2_rhs(1,el) = 0._WP
+     UV2_rhs(2,el) = 0._WP
+
+     if ( elem_neighbors(1,el) > 0) then
+        UV2_rhs(1,el) =               - U_c(el) + U_c(elem_neighbors(1,el))
+        UV2_rhs(2,el) =               - V_c(el) + V_c(elem_neighbors(1,el))
+     endif
+     if ( elem_neighbors(2,el) > 0) then
+        UV2_rhs(1,el) = UV2_rhs(1,el) - U_c(el) + U_c(elem_neighbors(2,el))
+        UV2_rhs(2,el) = UV2_rhs(2,el) - V_c(el) + V_c(elem_neighbors(2,el))
+     endif
+     if ( elem_neighbors(3,el) > 0) then
+        UV2_rhs(1,el) = UV2_rhs(1,el) - U_c(el) + U_c(elem_neighbors(3,el))
+        UV2_rhs(2,el) = UV2_rhs(2,el) - V_c(el) + V_c(elem_neighbors(3,el))
+     endif
+     if ( elem_neighbors(4,el) > 0  .and. elem_neighbors(4,el)/=elem_neighbors(1,el)) then
+        UV2_rhs(1,el) = UV2_rhs(1,el) - U_c(el) + U_c(elem_neighbors(4,el))
+        UV2_rhs(2,el) = UV2_rhs(2,el) - V_c(el) + V_c(elem_neighbors(4,el))
+     endif
  
-ENDDO
+  ENDDO
 !$OMP END DO
 !$OMP END PARALLEL
+
+#ifdef USE_MPI
+  call exchange_elem(UV2_rhs) !SH Size of the array correct order?
+#endif
+
 
 end subroutine viscosity_filt2x_2D
 !=======================================================================
@@ -787,169 +984,264 @@ end subroutine viscosity_filt_3D_to_2D
 ! sergey.danilov@awi.de  2012
 ! With Laplacian regularization 
 SUBROUTINE biharmonic_viscosity_3D_to_2D
-!
-!a changes have been made by Alexey Androsov
-!a (for sigma coordinates, and for tri-quad elements)
-!a 09.10.14
-!
-USE o_MESH
-USE o_ARRAYS
-USE o_PARAM
-!a USE g_PARSUP
-IMPLICIT NONE
- real(kind=WP)          :: xe, ye, u1, v1, Ah, acc !, delta_sigma
- real(kind=WP)          :: tx, ty, tl, tt, g1, g2
- real(kind=WP), allocatable  :: U_c(:,:), V_c(:,:)
- real(kind=WP), allocatable  :: U_3Dbih_puls(:,:), V_3Dbih_puls(:,:)
- integer               :: ed, el(2), nz, elem
 
-allocate(U_c(nsigma-1,elem2D), V_c(nsigma-1, elem2D))
-allocate(U_3Dbih_puls(nsigma-1,elem2D), V_3Dbih_puls(nsigma-1, elem2D))
+  !a changes have been made by Alexey Androsov
+  !a (for sigma coordinates, and for tri-quad elements)
+  !a 09.10.14
 
-U_3Dbih_puls = 0.0_WP
-V_3Dbih_puls = 0.0_WP
+  USE o_MESH
+  USE o_ARRAYS
+  USE o_PARAM
 
- call vel_gradients_puls
+  use g_parsup
+  use g_comm_auto
+  
+  IMPLICIT NONE
 
-   U_c=0.0_WP
-   V_c=0.0_WP
- DO ed=1, edge2D_in
+  real(kind=WP)          :: xe, ye, u1, v1, Ah, acc !, delta_sigma
+  real(kind=WP)          :: tx, ty, tl, tt, g1, g2
+  real(kind=WP), allocatable  :: U_c(:,:), V_c(:,:)
+  real(kind=WP), allocatable  :: U_3Dbih_puls(:,:), V_3Dbih_puls(:,:)
+  integer               :: ed, el(2), nz, elem
+
+  integer :: edglim
+
+  allocate(U_c(nsigma-1,myDim_elem2D+eDim_elem2D+eXDim_elem2D), &
+           V_c(nsigma-1, myDim_elem2D+eDim_elem2D+eXDim_elem2D))
+  allocate(U_3Dbih_puls(nsigma-1, myDim_elem2D+eDim_elem2D+eXDim_elem2D), &
+           V_3Dbih_puls(nsigma-1, myDim_elem2D+eDim_elem2D+eXDim_elem2D))
+
+  U_3Dbih_puls = 0.0_WP
+  V_3Dbih_puls = 0.0_WP
+
+  call vel_gradients_puls
+
+  U_c=0.0_WP
+  V_c=0.0_WP
+
+#ifdef USE_MPI
+  edglim=myDim_edge2D+eDim_edge2D
+#else
+  edglim=edge2D_in
+#endif  
+
+  DO ed=1, edglim
  
-   el=edge_tri(:,ed)
-   xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
-   ye=edge_dxdy(2,ed)*r_earth
-   
-   tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
-   ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
-   tl=sqrt(tx**2+ty**2)
-   tx=tx/tl
-   ty=ty/tl
+#ifdef USE_MPI
+     if (myList_edge2D(ed)>edge2D_in) cycle
+#endif
 
-   DO nz=1, nsigma-1
-   g1=0.5_WP*(vel_grad_ux(nz,el(1))+vel_grad_ux(nz,el(2)))
-   g2=0.5_WP*(vel_grad_uy(nz,el(1))+vel_grad_uy(nz,el(2)))
-   tt=g1*tx+g2*ty-(U_puls(nz,el(2))-U_puls(nz,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   u1=(g1*ye-g2*xe)
-   g1=0.5_WP*(vel_grad_vx(nz,el(1))+vel_grad_vx(nz,el(2)))
-   g2=0.5_WP*(vel_grad_vy(nz,el(1))+vel_grad_vy(nz,el(2)))
-   tt=g1*tx+g2*ty-(V_puls(nz,el(2))-V_puls(nz,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   v1=(g1*ye-g2*xe)
+     el=edge_tri(:,ed)
+     xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
+     ye=edge_dxdy(2,ed)*r_earth
    
-   U_c(nz,el(1))=U_c(nz,el(1))+u1*Jd(nz,ed)
-   V_c(nz,el(1))=V_c(nz,el(1))+v1*Jd(nz,ed)
-   U_c(nz,el(2))=U_c(nz,el(2))-u1*Jd(nz,ed)
-   V_c(nz,el(2))=V_c(nz,el(2))-v1*Jd(nz,ed)
-   
-   END DO
-END DO
+     tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
+     ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
+     tl=sqrt(tx**2+ty**2)
+     tx=tx/tl
+     ty=ty/tl
 
- ! ============ 
- ! Contribution from boundary edges
- ! ============
+     DO nz=1, nsigma-1
+        g1=0.5_WP*(vel_grad_ux(nz,el(1))+vel_grad_ux(nz,el(2)))
+        g2=0.5_WP*(vel_grad_uy(nz,el(1))+vel_grad_uy(nz,el(2)))
+        tt=g1*tx+g2*ty-(U_puls(nz,el(2))-U_puls(nz,el(1)))/tl
+        g1=g1-tx*tt
+        g2=g2-ty*tt
+        u1=(g1*ye-g2*xe)
+        g1=0.5_WP*(vel_grad_vx(nz,el(1))+vel_grad_vx(nz,el(2)))
+        g2=0.5_WP*(vel_grad_vy(nz,el(1))+vel_grad_vy(nz,el(2)))
+        tt=g1*tx+g2*ty-(V_puls(nz,el(2))-V_puls(nz,el(1)))/tl
+        g1=g1-tx*tt
+        g2=g2-ty*tt
+        v1=(g1*ye-g2*xe)
+   
+        U_c(nz,el(1))=U_c(nz,el(1))+u1*Jd(nz,ed)
+        V_c(nz,el(1))=V_c(nz,el(1))+v1*Jd(nz,ed)
+        U_c(nz,el(2))=U_c(nz,el(2))-u1*Jd(nz,ed)
+        V_c(nz,el(2))=V_c(nz,el(2))-v1*Jd(nz,ed)
+   
+     END DO
+  END DO
+
+  ! ============ 
+  ! Contribution from boundary edges
+  ! ============
  
- DO ed=1+edge2d_in,edge2D
-   el=edge_tri(:,ed)
-   xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
-   ye=edge_dxdy(2,ed)*r_earth
 
-   DO nz=1,nsigma-1
-   u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
-   v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
-   U_c(nz,el(1))=U_c(nz,el(1))+u1*Jd(nz,ed)
-   V_c(nz,el(1))=V_c(nz,el(1))+v1*Jd(nz,ed)
-   END DO
-END DO  
+#ifdef USE_MPI
+
+  call exchange_elem(U_c) !SH check this
+  call exchange_elem(V_c) !SH check this
+
+  DO ed=1,edglim
+     if (myList_edge2D(ed)>edge2D_in) then
+
+        el=edge_tri(:,ed)
+        xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
+        ye=edge_dxdy(2,ed)*r_earth
+
+        DO nz=1,nsigma-1
+           u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
+           v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
+           U_c(nz,el(1))=U_c(nz,el(1))+u1*Jd(nz,ed)
+           V_c(nz,el(1))=V_c(nz,el(1))+v1*Jd(nz,ed)
+        END DO
+
+     end if
+  END DO  
+
+  call exchange_elem(U_c)
+  call exchange_elem(V_c)
+
+#else
+
+  DO ed=1+edge2d_in,edge2D
+     el=edge_tri(:,ed)
+     xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
+     ye=edge_dxdy(2,ed)*r_earth
+
+     DO nz=1,nsigma-1
+        u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
+        v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
+        U_c(nz,el(1))=U_c(nz,el(1))+u1*Jd(nz,ed)
+        V_c(nz,el(1))=V_c(nz,el(1))+v1*Jd(nz,ed)
+     END DO
+  END DO
+
+#endif
 
  ! =============  
  ! Multiply with biharmonic viscosity
  ! ============= 
   
- DO elem=1, elem2D
- ! we have to divide on elem_area
- ! - takes into account the fact that 
- ! biharmonic goes with different sign. 
-         acc = sum(w_cv(1:4,elem)*ac(elem2D_nodes(:,elem)))
-   Ah=-acc*Abh0*sqrt(elem_area(elem)/scale_area)/scale_area
-   DO nz=1, nsigma-1
-     U_c(nz,elem)=U_c(nz,elem)*(Ah-Visc(nz,elem))
-     V_c(nz,elem)=V_c(nz,elem)*(Ah-Visc(nz,elem))
-   END DO
- END DO
-
-!a call exchange_elem3D(U_c)
-!a call exchange_elem3D(V_c)
- call vel_lapl_gradients(U_c, V_c)
-
- 
- ! =============
- ! Apply Laplace operator once more
- ! =============
- DO ed=1, edge2D_in
-   el=edge_tri(:,ed)
-
-   xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
-   ye=edge_dxdy(2,ed)*r_earth
-   
-   tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
-   ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
-   tl=sqrt(tx**2+ty**2)
-   tx=tx/tl
-   ty=ty/tl
-   
-   DO nz=1, nsigma-1
-   g1=0.5_WP*(vel_grad_ux(nz,el(1))+vel_grad_ux(nz,el(2)))
-   g2=0.5_WP*(vel_grad_uy(nz,el(1))+vel_grad_uy(nz,el(2)))
-   tt=g1*tx+g2*ty-(U_c(nz,el(2))-U_c(nz,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   u1=(g1*ye-g2*xe)
-   g1=0.5_WP*(vel_grad_vx(nz,el(1))+vel_grad_vx(nz,el(2)))
-   g2=0.5_WP*(vel_grad_vy(nz,el(1))+vel_grad_vy(nz,el(2)))
-   tt=g1*tx+g2*ty-(V_c(nz,el(2))-V_c(nz,el(1)))/tl
-   g1=g1-tx*tt
-   g2=g2-ty*tt
-   v1=(g1*ye-g2*xe)
- 
-   U_3Dbih_puls(nz,el(1))=U_3Dbih_puls(nz,el(1))+u1 !*Jd(nz,ed)
-   V_3Dbih_puls(nz,el(1))=V_3Dbih_puls(nz,el(1))+v1 !*Jd(nz,ed)
-   U_3Dbih_puls(nz,el(2))=U_3Dbih_puls(nz,el(2))-u1 !*Jd(nz,ed)
-   V_3Dbih_puls(nz,el(2))=V_3Dbih_puls(nz,el(2))-v1 !*Jd(nz,ed)
-   
-   END DO
-END DO
-
-! ============ 
-! Contribution from boundary edges
-! ============
-
- DO ed=1+edge2D_in, edge2D
- 
-   el=edge_tri(:,ed)
-   xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
-   ye=edge_dxdy(2,ed)*r_earth
-
-   DO nz=1, nsigma-1
-   u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
-   v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
-   U_3Dbih_puls(nz,el(1))=U_3Dbih_puls(nz,el(1))+u1 !*Jd(nz,ed)
-   V_3Dbih_puls(nz,el(1))=V_3Dbih_puls(nz,el(1))+v1 !*Jd(nz,ed)
-   END DO
-END DO
-
- DO elem=1,elem2D
-   DO nz=1,nsigma-1
- !  delta_sigma = sigma(nz) - sigma(nz+1)
-   U_rhs_2D_3D(1,elem) = U_rhs_2D_3D(1,elem) + U_3Dbih_puls(nz,elem)*Je(nz,elem) !delta_sigma
-   U_rhs_2D_3D(2,elem) = U_rhs_2D_3D(2,elem) + V_3Dbih_puls(nz,elem)*Je(nz,elem) !delta_sigma
-    END DO
+  DO elem=1, myDim_elem2D
+     ! we have to divide on elem_area
+     ! - takes into account the fact that 
+     ! biharmonic goes with different sign. 
+     acc = sum(w_cv(1:4,elem)*ac(elem2D_nodes(:,elem)))
+     Ah=-acc*Abh0*sqrt(elem_area(elem)/scale_area)/scale_area
+     DO nz=1, nsigma-1
+        U_c(nz,elem)=U_c(nz,elem)*(Ah-Visc(nz,elem))
+        V_c(nz,elem)=V_c(nz,elem)*(Ah-Visc(nz,elem))
+     END DO
   END DO
-deallocate(U_3Dbih_puls, V_3Dbih_puls)
-deallocate(V_c, U_c)
+
+#ifdef USE_MPI
+  call exchange_elem(U_c)
+  call exchange_elem(V_c)
+#endif
+
+  call vel_lapl_gradients(U_c, V_c)
+
+ 
+  ! =============
+  ! Apply Laplace operator once more
+  ! =============
+
+  DO ed=1, edglim
+
+#ifdef USE_MPI
+     if (myList_edge2D(ed)>edge2D_in) cycle
+#endif
+
+     el=edge_tri(:,ed)
+
+     xe=edge_dxdy(1,ed)*r_earth*0.5_WP*(elem_cos(el(1))+elem_cos(el(2)))
+     ye=edge_dxdy(2,ed)*r_earth
+   
+     tx=-edge_cross_dxdy(1,ed)+edge_cross_dxdy(3,ed)
+     ty=-edge_cross_dxdy(2,ed)+edge_cross_dxdy(4,ed)
+     tl=sqrt(tx**2+ty**2)
+     tx=tx/tl
+     ty=ty/tl
+   
+     DO nz=1, nsigma-1
+        g1=0.5_WP*(vel_grad_ux(nz,el(1))+vel_grad_ux(nz,el(2)))
+        g2=0.5_WP*(vel_grad_uy(nz,el(1))+vel_grad_uy(nz,el(2)))
+        tt=g1*tx+g2*ty-(U_c(nz,el(2))-U_c(nz,el(1)))/tl
+        g1=g1-tx*tt
+        g2=g2-ty*tt
+        u1=(g1*ye-g2*xe)
+        g1=0.5_WP*(vel_grad_vx(nz,el(1))+vel_grad_vx(nz,el(2)))
+        g2=0.5_WP*(vel_grad_vy(nz,el(1))+vel_grad_vy(nz,el(2)))
+        tt=g1*tx+g2*ty-(V_c(nz,el(2))-V_c(nz,el(1)))/tl
+        g1=g1-tx*tt
+        g2=g2-ty*tt
+        v1=(g1*ye-g2*xe)
+ 
+        U_3Dbih_puls(nz,el(1))=U_3Dbih_puls(nz,el(1))+u1 !*Jd(nz,ed)
+        V_3Dbih_puls(nz,el(1))=V_3Dbih_puls(nz,el(1))+v1 !*Jd(nz,ed)
+        U_3Dbih_puls(nz,el(2))=U_3Dbih_puls(nz,el(2))-u1 !*Jd(nz,ed)
+        V_3Dbih_puls(nz,el(2))=V_3Dbih_puls(nz,el(2))-v1 !*Jd(nz,ed)
+   
+     END DO
+  END DO
+
+  ! ============ 
+  ! Contribution from boundary edges
+  ! ============
+
+#ifdef USE_MPI
+
+  call exchange_elem(U_3Dbih_puls) !SH Check this
+  call exchange_elem(V_3Dbih_puls) !SH Check this
+
+  DO ed=1,edglim
+     if (myList_edge2D(ed)>edge2D_in) then
+
+        el=edge_tri(:,ed)
+        xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
+        ye=edge_dxdy(2,ed)*r_earth
+
+        DO nz=1, nsigma-1
+           u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
+           v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
+           U_3Dbih_puls(nz,el(1))=U_3Dbih_puls(nz,el(1))+u1 !*Jd(nz,ed)
+           V_3Dbih_puls(nz,el(1))=V_3Dbih_puls(nz,el(1))+v1 !*Jd(nz,ed)
+        END DO
+
+     end if
+
+  END DO
+
+  call exchange_elem(U_3Dbih_puls)
+  call exchange_elem(V_3Dbih_puls)
+
+#else
+
+  DO ed=1+edge2D_in, edge2D
+ 
+     el=edge_tri(:,ed)
+     xe=edge_dxdy(1,ed)*r_earth*elem_cos(el(1)) 
+     ye=edge_dxdy(2,ed)*r_earth
+
+     DO nz=1, nsigma-1
+        u1=(vel_grad_ux(nz,el(1)))*ye-(vel_grad_uy(nz,el(1)))*xe
+        v1=(vel_grad_vx(nz,el(1)))*ye-(vel_grad_vy(nz,el(1)))*xe
+        U_3Dbih_puls(nz,el(1))=U_3Dbih_puls(nz,el(1))+u1 !*Jd(nz,ed)
+        V_3Dbih_puls(nz,el(1))=V_3Dbih_puls(nz,el(1))+v1 !*Jd(nz,ed)
+     END DO
+  END DO
+
+#endif
+
+  DO elem=1,myDim_elem2D
+     DO nz=1,nsigma-1
+        !  delta_sigma = sigma(nz) - sigma(nz+1)
+        U_rhs_2D_3D(1,elem) = U_rhs_2D_3D(1,elem) + U_3Dbih_puls(nz,elem)*Je(nz,elem) !delta_sigma
+        U_rhs_2D_3D(2,elem) = U_rhs_2D_3D(2,elem) + V_3Dbih_puls(nz,elem)*Je(nz,elem) !delta_sigma
+     END DO
+  END DO
+
+#ifdef USE_MPI
+  call exchange_elem(U_rhs_2D_3D)
+#endif
+
+  deallocate(U_3Dbih_puls, V_3Dbih_puls)
+  deallocate(V_c, U_c)
+
 END subroutine biharmonic_viscosity_3D_to_2D
+
 ! ===================================================================================
 SUBROUTINE momentum_vert_expl_visc
 !

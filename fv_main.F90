@@ -34,6 +34,8 @@ PROGRAM MAIN
   real(kind=WP) :: mx_bp2, mn_bp2, mx_bpu3, mx_bpv3, mx_un2, mn_un2, mx_un, mx_vn, mx_w, mn_w
   real(kind=WP) :: mx_cd, mn_cd, mx_av, mx_kv
 
+  real(kind=WP) :: mx_con, mn_con, mx_h_var, mn_h_var
+
   real(kind=WP) :: start_time, end_time, t0, t_end, t1,t2,t3,t4
   integer :: c1,c1rate,c1max,c2,c2rate,c2max
 
@@ -41,7 +43,7 @@ PROGRAM MAIN
 
   logical :: enable_output_main_switch
 
-  enable_output_main_switch = .TRUE. 
+  enable_output_main_switch = .FALSE. 
 
 #ifdef USE_MPI
   call MPI_INIT(ierr)
@@ -220,11 +222,20 @@ print *,mype,type_task,ver_mix
 
   !SH open preliminary netcdf output file
   !SH TO BE REPLACED
-  allocate(coord_nod2D_glob(2,nod2D), index_nod2D_glob(nod2D))
-  allocate(elem2D_nodes_glob(4,elem2D))
-
-  allocate(eta_n_2_glob(nod2D))
-  allocate(TF_glob(nsigma-1,nod2D))     
+  if (mype==0) then  
+     allocate(coord_nod2D_glob(2,nod2D), index_nod2D_glob(nod2D))
+     allocate(depth_glob(nod2D))
+     allocate(elem2D_nodes_glob(4,elem2D))
+     allocate(eta_n_2_glob(nod2D))
+     allocate(TF_glob(nsigma-1,nod2D))
+  else
+     ! only dummy fields for mpes>0 (not master)
+     allocate(coord_nod2D_glob(2,2), index_nod2D_glob(2))
+     allocate(depth_glob(2))
+     allocate(elem2D_nodes_glob(4,2))
+     allocate(eta_n_2_glob(2))
+     allocate(TF_glob(2,2))
+  end if
   
   !Generate ac file for sponge layer
   ALLOCATE(ac(myDim_nod2D+eDim_nod2D))
@@ -234,7 +245,7 @@ print *,mype,type_task,ver_mix
   
   call gather_nod(coord_nod2D, coord_nod2D_glob)
   call gather_nod(index_nod2D, index_nod2D_glob)
-
+  call gather_nod(depth, depth_glob)
 
   if (nobn>0) allocate(X1obn(nobn),X2obn(nobn),in_obn(nobn))
 
@@ -246,7 +257,6 @@ print *,mype,type_task,ver_mix
      call MPI_BCast(X1obn,nobn,MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
      call MPI_BCast(X2obn,nobn,MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
      call MPI_BCast(in_obn,nobn,MPI_INTEGER, 0, MPI_COMM_FESOM_C, ierror)
-
      
      if (nobn>0) call ac_create(ac)
      call exchange_nod(ac)
@@ -254,6 +264,9 @@ print *,mype,type_task,ver_mix
 
   end if
 
+  !SH Set the global indexes of the open boundary nodes
+  !SH Check this part, especially when open boundary nodes are
+  !   distributed in several partitions
   if (mynobn>0) then
      ind=0
      do n=1,myDim_nod2D
@@ -269,8 +282,8 @@ print *,mype,type_task,ver_mix
         endif
 
      end do
+     if (ind/=mynobn) STOP 'OBN Discrepancy!!'
   end if
-
 
 !Specific test
 !!$if (npes==2) then
@@ -283,7 +296,6 @@ print *,mype,type_task,ver_mix
 !!$ end do
 !!$ close(fID)
 !!$end if
-
 
 
 #else
@@ -304,11 +316,12 @@ print *,mype,type_task,ver_mix
      call ac_create(ac)
      if (mype==0) print *,'AC values (open boundaries) are set.'
   end if
-open(22,file='ac_values_ser')
-do n=1,nod2D
-   write (22,*) n,ac(n)
-end do
-close(22)
+
+!!$open(22,file='ac_values_ser')
+!!$do n=1,nod2D
+!!$   write (22,*) n,ac(n)
+!!$end do
+!!$close(22)
 
 #endif
 
@@ -386,10 +399,12 @@ close(22)
      endif
   endif
 
+
   !=================================
   ! inizialization of ocean forcing
   !=================================
-!SH SKIPPING FOR NOW   if (key_atm) call sbc_ini
+  if (key_atm) call sbc_ini
+!stop 'YIPPIE'
   !=================================
   ! inizialization of open boundary
   !=================================
@@ -406,7 +421,18 @@ close(22)
   if (comp_sediment) then
      h_var_old = h_var
      h_var_old2 = h_var2
+
   end if
+!!$open(75,file='w_cv.dat')
+!!$do n=1,elem2D
+!!$write(75,*) w_cv(1:4,n)
+!!$enddo
+!!$close(75)
+!!$open(75,file='elem_area.dat')
+!!$do n=1,elem2D
+!!$write(75,*) elem_area(n)
+!!$enddo
+!!$close(75)
 
 
 !===============================
@@ -420,7 +446,7 @@ close(22)
 
   !VF The loop starts from 1 now, nsteps changes (decreasing) if you use hot_start
 
-!nsteps=2000  !2000   !400  !8000
+!nsteps=870 ! 200  !2000   !400  !8000
 
 #ifdef USE_MPI 
   t0=MPI_Wtime()
@@ -452,8 +478,9 @@ endif
      ! surface boundary conditions
      !$ if (iverbosity >= 3) t2=omp_get_wtime()
 
-
-!SH SKIPPING FOR NOW     if (key_atm) call sbc_do
+if ( mod(n_dt,IREP)==0) then
+     if (key_atm) call sbc_do
+end if
 
      !$ if (iverbosity >= 3) t3=omp_get_wtime()
 
@@ -465,6 +492,7 @@ endif
 #endif
 
      call oce_timestep
+
 
 #ifdef USE_MPI 
   t2=MPI_Wtime()
@@ -481,12 +509,15 @@ endif
      ! AA
      If (comp_sediment) then
 
-        if ( ((n/period_m2)*period_m2) == n) then
+        call sediment
+
+        !if ( ((n/period_m2)*period_m2) == n) then
+        if ( mod(n_dt,IREP*6)==0 ) then
            do nn=1,myDim_nod2D
               depth(nn) = depth(nn) + (h_var(nn) - h_var_old(nn))
               h_var_old(nn) = h_var(nn)
               !VF: alternative calculation
-              h_var_old2(nn) = h_var2(nn)
+!aa67              h_var_old2(nn) = h_var2(nn)
            enddo
         endif
 
@@ -502,14 +533,16 @@ endif
      !$ if (iverbosity >= 3) t4=omp_get_wtime()
 
 #ifdef USE_MPI
-     
+
+!!$print *,'OBACHT: ',mype,time,maxval(eta_n)
      call MPI_REDUCE(maxval(eta_n),mx_eta, 1, MPI_DOUBLE_PRECISION, MPI_MAX, &
           0, MPI_COMM_FESOM_C, MPIerr)
      call MPI_REDUCE(minval(eta_n),mn_eta, 1, MPI_DOUBLE_PRECISION, MPI_MIN, &
           0, MPI_COMM_FESOM_C, MPIerr)
      
      if (mype==0) write(51,'(3e13.5)') (time- time_jd0*86400.0_WP)/3600.0_WP,mx_eta,mn_eta
-     if (mype==0) write(*,'(3e13.5)') (time- time_jd0*86400.0_WP)/3600.0_WP,mx_eta,mn_eta
+     !if (mype==0) write(*,'(3e13.5)') (time- time_jd0*86400.0_WP)/3600.0_WP,mx_eta,mn_eta
+     if (mype==0) write(*,'(3e13.5)') time,mx_eta,mn_eta
 
 #else
 
@@ -535,6 +568,7 @@ endif
 !!$           T_counter=T_counter+1
 !!$        endif
 !!$     endif
+!!$SH Comment above should remain
 
      dt=dt_old
      dt_2D=dt_2D_old
@@ -543,8 +577,8 @@ endif
      !VF, update river input characteristics, if necessary
      !==================================================
 
-!SH skipping for now     if (riv_control)    call update_info_riv(rk,n_dt2, turn_on_riv)
-!SH skipping for now     if (riv_control_ob) call update_info_riv_ob(rk2,n_dt2, turn_on_riv)
+     if (riv_control)    call update_info_riv(rk,n_dt2, turn_on_riv) !SH skipping for now 
+     if (riv_control_ob) call update_info_riv_ob(rk2,n_dt2, turn_on_riv)!SH skipping for now   
 
      !==================================================
      !VF, update sediments concentration at the ob, if necessary
@@ -610,6 +644,14 @@ endif
                 MPI_COMM_FESOM_C, MPIerr)
            call MPI_AllREDUCE(minval(SF),mn_s, 1, MPI_DOUBLE_PRECISION, MPI_MIN, &
                 MPI_COMM_FESOM_C, MPIerr)
+           call MPI_AllREDUCE(maxval(con),mx_con, 1, MPI_DOUBLE_PRECISION, MPI_MAX, &
+                              MPI_COMM_FESOM_C, MPIerr)
+           call MPI_AllREDUCE(minval(con),mn_con, 1, MPI_DOUBLE_PRECISION, MPI_MIN, &
+                              MPI_COMM_FESOM_C, MPIerr)
+           call MPI_AllREDUCE(maxval(h_var),mx_h_var, 1, MPI_DOUBLE_PRECISION, MPI_MAX, &
+                              MPI_COMM_FESOM_C, MPIerr)
+           call MPI_AllREDUCE(minval(h_var),mn_h_var, 1, MPI_DOUBLE_PRECISION, MPI_MIN, &
+                              MPI_COMM_FESOM_C, MPIerr)
         end if
 #endif
 
@@ -629,6 +671,7 @@ endif
 
         if (mype==0) then
            print *,'Energy ENERGY ENERGY : ',eout
+
            !write(52,'(3e13.5)') time/3600.0_WP,U_n_2D
            write(53,'(4e16.7)') time/86400.0_WP-time_jd0,eout
            if (iverbosity >= 1) then
@@ -675,25 +718,41 @@ endif
                  endif
 #endif                 
               endif
-              write(*,*) 'dt_2D', dt_2D
+              write(*,*) 'dt_2D', dt_2D, mype
               If (comp_sediment) then
-                 write(*,*) 'concentration of sedimentation max, min: con = ' , maxval(con)*plop_s*10,minval(con)*plop_s*10
-                 write(*,*) 'concentration of sedimentation 3d = ' , maxval(CF),minval(CF)
-                 write(*,*) 'concentration riv = ' , maxval(CF(:,riv_node(:))),minval(CF(:,riv_node(:)))
-                 write(*,*) 'w_s = ' ,maxval(w_s),minval(w_s)
-                 write(*,*) 'Visc = ' ,maxval(Visc),minval(Visc)
+#ifdef USE_MPI
+                 write(*,*) 'concentration of sedimentation max, min: con = ' , mx_con,mn_con
+                 !aaa write(*,*) 'concentration of sedimentation max, min: con = ' , maxval(con)*plop_s*10,minval(con)*plop_s*10
+                 !aaa write(*,*) 'concentration of sedimentation 3d = ' , maxval(CF),minval(CF)
+                 !aaa write(*,*) 'concentration riv = ' , maxval(CF(:,riv_node(:))),minval(CF(:,riv_node(:)))
+                 !aaa write(*,*) 'w_s = ' ,maxval(w_s),minval(w_s)
+                 !aaa write(*,*) 'Visc = ' ,maxval(Visc),minval(Visc)
+                 
+                 write(*,*) 'bottom variation max, min: h_var = ' , mx_h_var,mn_h_var
+                 !aaa write(*,*) 'bottom variation max, min: h_var2 = ' , maxval(h_var2),minval(h_var2)
+                 !aaa write(*,*) 'Er_Dep', maxval(Er_Dep),minval(Er_Dep), sum(Er_Dep)/nod2D
+                 !aaa write(*,*) 'riv er_dep', maxval(Er_Dep(riv_node(:))),minval(Er_Dep(riv_node(:)))
+                 !aaa write(*,*) 'C_d = ', maxval(C_d_el), minval(C_d_el)
+
+#else
+                 write(*,*) 'concentration of sedimentation max, min: con = ' , maxval(con),minval(con)
+                 !aaa write(*,*) 'concentration of sedimentation max, min: con = ' , maxval(con)*plop_s*10,minval(con)*plop_s*10
+                 !aaa write(*,*) 'concentration of sedimentation 3d = ' , maxval(CF),minval(CF)
+                 !aaa write(*,*) 'concentration riv = ' , maxval(CF(:,riv_node(:))),minval(CF(:,riv_node(:)))
+                 !aaa write(*,*) 'w_s = ' ,maxval(w_s),minval(w_s)
+                 !aaa write(*,*) 'Visc = ' ,maxval(Visc),minval(Visc)
                  write(*,*) 'bottom variation max, min: h_var = ' , maxval(h_var),minval(h_var)
-                 write(*,*) 'bottom variation max, min: h_var2 = ' , maxval(h_var2),minval(h_var2)
-                 write(*,*) 'Er_Dep', maxval(Er_Dep),minval(Er_Dep), sum(Er_Dep)/nod2D
-                 write(*,*) 'riv er_dep', maxval(Er_Dep(riv_node(:))),minval(Er_Dep(riv_node(:)))
-                 write(*,*) 'C_d = ', maxval(C_d_el), minval(C_d_el)
+                 !aaa write(*,*) 'bottom variation max, min: h_var2 = ' , maxval(h_var2),minval(h_var2)
+                 !aaa write(*,*) 'Er_Dep', maxval(Er_Dep),minval(Er_Dep), sum(Er_Dep)/nod2D
+                 !aaa write(*,*) 'riv er_dep', maxval(Er_Dep(riv_node(:))),minval(Er_Dep(riv_node(:)))
+                 !aaa write(*,*) 'C_d = ', maxval(C_d_el), minval(C_d_el)
                  !write(*,*) 'riv node = ', Unode(:,riv_node(:)), maxval(Vnode(:,riv_node(:)))
                  !write(*,*) 'riv node = ', Er_Dep(riv_node(:)), maxval(w_s(:,riv_node(:))),minval(w_s(:,riv_node(:)))
+#endif
               endif
            endif
         endif
      end if
-
      !aaa output for LE only!!!!
 !SH skipped for now     if ( mod(n_dt, IREC)==0 ) then
 !SH skipped for now        if (type_task>1) call cross_sec_LE
@@ -842,7 +901,7 @@ subroutine read_mesh_ser
      if (index_nod2D(n)==2) then
         ind=ind+1
         in_obn(ind)=n
-        my_in_obn_idx(ind)=ind
+        my_in_obn_idx(ind)=n
      endif
   end do
 
@@ -919,9 +978,9 @@ subroutine read_mesh_ser
   end if
 
 !SHTEST TOPOGRAPHY
-!do n=1,nod2D
-!  if (depth(n)<10.0) depth(n)=10.0
-!end do
+do n=1,nod2D
+  if (depth(n)<10.0) depth(n)=10.0
+end do
 
   !SH check this!! (what if part of domain is dry)
   !do n=1,nod2D
@@ -1006,10 +1065,11 @@ SUBROUTINE array_setup
   windx=0.0_WP
   windy=0.0_WP
 
-ALLOCATE( qns(node_size), emp(node_size), qsr(node_size))
-qns = 0.0_WP
-emp = 0.0_WP
-qsr = 0.0_WP
+!These are allocated in sbc_ini remove if all works
+!ALLOCATE( qns(node_size), emp(node_size), qsr(node_size))
+!qns = 0.0_WP
+!emp = 0.0_WP
+!qsr = 0.0_WP
 
   allocate(relax_coef(node_size))
   relax_coef=0.0_WP
@@ -1027,7 +1087,7 @@ qsr = 0.0_WP
      allocate(Tclim(nsigma-1,node_size), Sclim(nsigma-1,node_size))
      TF(:,:)=0.0_WP; SF(:,:)=0.0_WP
   endif
-  if (comp_sediment) allocate(CF(nsigma-1,node_size),c_old(nsigma-1,node_size),w_s(nsigma-1,node_size),Cclim(nsigma-1,node_size))
+!aaa  if (comp_sediment) allocate(CF(nsigma-1,node_size),c_old(nsigma-1,node_size),w_s(nsigma-1,node_size),Cclim(nsigma-1,node_size))
   allocate(rho_c(nsigma-1,node_size))
   rho_c=0.0_WP
 
@@ -1146,10 +1206,10 @@ qsr = 0.0_WP
   hama_v = 0.0_WP
   E_sed = 0.0_WP
   Er_Dep = 0.0_WP
-  h_var = 1.0_WP
-  h_var_old = 1.0_WP
-  h_var2 = 1.0_WP
-  h_var_old2 = 1.0_WP
+  h_var = 0.0_WP
+  h_var_old = 0.0_WP
+  h_var2 = 0.0_WP
+  h_var_old2 = 0.0_WP
   allocate(con(node_size), con_bc(node_size))
   con = 0.0_WP
   con_bc = 0.0_WP
@@ -1352,7 +1412,6 @@ SUBROUTINE timestep_AB_2D(step)
  t_0=MPI_Wtime()
 #endif
 
-
 !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(n,el)
 !$OMP DO
   do n=1,myDim_nod2D+eDim_nod2D
@@ -1366,7 +1425,8 @@ SUBROUTINE timestep_AB_2D(step)
   enddo
 !$OMP END DO
 !$OMP END PARALLEL
-
+!!$print *,minval(UAB(1,:)),maxval(UAB(1,:))
+!!$print *,minval(UAB(2,:)),maxval(UAB(2,:))
 
 !aa13.02.20 print *,'step, UAB :',mype,step,minval(UAB(1,:)),maxval(UAB(1,:))
 !aa13.02.20 print *,'step, VAB :',mype,step,minval(UAB(2,:)),maxval(UAB(2,:))
@@ -1380,6 +1440,8 @@ SUBROUTINE timestep_AB_2D(step)
   !  compute ssh_rhs
   !==================
 
+!!$print *,'SSH_RHS111',step,minval(ssh_rhs(:)),maxval(ssh_rhs(:))
+
   call compute_ssh_rhs_elem
 
 #ifdef USE_MPI 
@@ -1389,7 +1451,7 @@ SUBROUTINE timestep_AB_2D(step)
 
 !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(i)
 !$OMP DO
-
+!!$print *,'SSH_RHS222',step,minval(ssh_rhs(:)),maxval(ssh_rhs(:))
   do i=1,myDim_nod2D
      !Calculate eta_n+1
      if (index_nod2D(i) < 2) ssh_rhs(i) = eta_n(i) + dt_2D*ssh_rhs(i)/area(i)
@@ -1398,8 +1460,9 @@ SUBROUTINE timestep_AB_2D(step)
 #ifdef USE_MPI
   call exchange_nod(ssh_rhs)
 #endif
-
   
+!!$print *,'SSH_RHS333',step,minval(ssh_rhs(:)),maxval(ssh_rhs(:))
+
 !aa13.02.20 print *,'ssh_rhs:',step,minval(ssh_rhs(:)),maxval(ssh_rhs(:))
 
 
@@ -1492,7 +1555,7 @@ SUBROUTINE timestep_AB_2D(step)
 
      if (filt_3D)  call viscosity_filt_3D_to_2D
 
-!SH SKIPPED FOR NOW     if (bih_3D)  call biharmonic_viscosity_3D_to_2D
+     if (bih_3D)  call biharmonic_viscosity_3D_to_2D
 
 !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(elem)
      DO elem=1,myDim_elem2D
@@ -1526,6 +1589,7 @@ SUBROUTINE timestep_AB_2D(step)
 
 
   call update_2D_vel(step)
+!!$print *,'HUHU2',step,minval(U_rhs_2D(2,:)),maxval(U_rhs_2D(2,:))
 !aa13.02.20 print *,'HUHU2',step,minval(U_rhs_2D(2,:)),maxval(U_rhs_2D(2,:))
 
 #ifdef USE_MPI 
@@ -1614,7 +1678,7 @@ SUBROUTINE timestep_AB_2D(step)
 ! VF calling of sediment procedure is shifted here,
 ! so do not spoil parallelization
 ! AA compute sediment model
-!SH SKIPPING FOR NOW    If (comp_sediment) call sediment
+!  if (comp_sediment) call sediment  !SH: this call moved to the main program (aaa)
 ! AA
 
 #ifdef USE_MPI 
@@ -1871,20 +1935,20 @@ SUBROUTINE oce_timestep
 
 !aa13.02.20  print *,mype,'oce_timestep started!'
 
-
+!!$print *,'U_n RANGE:',minval(U_n_2D(1,:)),maxval(U_n_2D(1,:))
   if (T_potential) call potential           ! AA compute tidal geopotential here
 
   select case (type_task)
 
   case(1)
 
-!!$     !$ if (iverbosity >= 3) t1=omp_get_wtime()
+     !$ if (iverbosity >= 3) t1=omp_get_wtime()
      call oce_barotropic_timestep
 
-!!$     !$ if (iverbosity >= 3) then
-!!$     !$    t2=omp_get_wtime()
-!!$     !$    write(*,'("oce_barotropic_timestep took ",f10.4,"s")') t2-t1
-!!$     !$ endif
+     !$ if (iverbosity >= 3) then
+     !$    t2=omp_get_wtime()
+     !$    write(*,'("oce_barotropic_timestep took ",f10.4,"s")') t2-t1
+     !$ endif
 
   case(2)
 
@@ -1940,21 +2004,23 @@ SUBROUTINE oce_timestep
      !$    write(*,'("vert_vel_sigma took          ",f10.4," s")') t8-t7
      !$ endif
 
-     if (comp_sediment) then
+!aaa     if (comp_sediment) then
         !VF If comp_sediment and no other tracers, the density still changes due to varying concentration
         !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(n, nz)
-        DO n=1,nod2D
+!aaa        DO n=1,myDim_nod2D+eDim_nod2D
            ! VF, compute density in the vertical column and add it to rho_c - current rho, needed in fv_tracer
            ! VF, add effect of the susp. sediments
-           DO nz=1,nsigma-1
-              call densityJM(T_const, S_const, -Z(nz,n), rho_c(nz,n),CF(nz,n))
-           END DO
-        END DO
+!aaa           DO nz=1,nsigma-1
+!aaa              call densityJM(T_const, S_const, -Z(nz,n), rho_c(nz,n),CF(nz,n))
+!aaa           END DO
+!aaa        END DO
         !$OMP END PARALLEL DO
 
-        call solve_tracers_sed
+        
 
-     endif
+!aaa        call solve_tracers_sed
+
+!aaa     endif
 
   case(3)
      
@@ -2052,7 +2118,7 @@ SUBROUTINE oce_timestep
      call solve_tracers
 
 
-!SH SKIPPED FOR NOW     if (comp_sediment) call solve_tracers_sed
+!aaa     if (comp_sediment) call solve_tracers_sed
 
      !$ if (iverbosity >= 3) then
      !$   t10=omp_get_wtime()

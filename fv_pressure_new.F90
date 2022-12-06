@@ -16,7 +16,7 @@ SUBROUTINE pressure
   IMPLICIT NONE
 
   INTEGER        :: nz, n
-  REAL(kind=WP)  :: g_density0_inv, hpress_clim(nsigma,nod2D), rho_clim
+  REAL(kind=WP)  :: g_density0_inv, hpress_clim(nsigma,myDim_nod2D+eDim_nod2D), rho_clim
   REAL(kind=WP)  :: mx_rho, mn_rho
 
   interface

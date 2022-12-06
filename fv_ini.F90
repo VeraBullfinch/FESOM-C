@@ -86,8 +86,12 @@ subroutine initial_state
      mapping(iofs)=n
   end do
 
+
+  print *,'Gathering elements and calculating scale_area ...'
   call gather_elem(elem_area,all_elem_area)
   scale_area=sum(all_elem_area)/elem2D
+
+  call MPI_BCast(scale_area, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
 
 #else
   scale_area=sum(elem_area)/elem2D
@@ -194,18 +198,20 @@ subroutine initial_state
   !VF initialization of sediment module and taking into account
   !presence of sediments into the density calculation
 
-  if (comp_sediment) call comp_sediment_ini
+!aa67  if (comp_sediment) call comp_sediment_ini
 
   density_0=1000.0_WP
+  den_0=0.0_wp
 
   !VF, calculate density using info about T_const, S_const and Concentration of sus. sediments
-  if (comp_sediment) then
+!aaa   if (comp_sediment) then
 !SH skipped for now max/min CF must be properly computed!!
-     call densityJM(T_const, S_const, 0.0, den_0,(maxval(CF)+minval(CF))*0.5_WP)
-  else
-     call densityJM(T_const, S_const, 0.0, den_0)
-  endif
+!aaa      call densityJM(T_const, S_const, 0.0, den_0,(maxval(CF)+minval(CF))*0.5_WP)
+!aaa   else
+!aaa      call densityJM(T_const, S_const, 0.0, den_0)
+!aaa   endif
 
+ 
   if (mype==0) write(*,*) 'den_0 = ', den_0
   density_0=density_0+den_0
 
@@ -226,7 +232,6 @@ subroutine initial_state
      allocate(ampt(n,12),fazt(n,12))
      ampt=0.0_WP
      fazt=0.0_WP
-
 
      if (mype==0) then
         allocate(aux(n,n_th*2))
@@ -444,100 +449,100 @@ subroutine initial_riv
   real(kind=WP) :: xv, yv, aux, auy, xc(2), n1(2), n2(2), A1, A2, B1, B2, C1, C2, amin
   real(kind=WP) :: ss,tt,pp, pr
   real(kind=WP), external :: theta
-  real(kind=WP), allocatable, dimension(:,:)  ::  S_t, T_t
+!aa67  real(kind=WP), allocatable, dimension(:,:)  ::  S_t, T_t
 
   integer, allocatable, dimension(:) :: mapping
   integer :: ipos
   integer :: ierror
 
-  if (riv_OB) then
-     if (mype==0) then
-        open(50,file=trim(meshpath)//trim(TITLE)//'_riv_ob.out', status='old')
-        read(50,*) n
-        read(50,*) m
-        close(50)
-     end if
+!aa67  if (riv_OB) then
+!aa67     if (mype==0) then
+!aa67        open(50,file=trim(meshpath)//trim(TITLE)//'_riv_ob.out', status='old')
+!aa67        read(50,*) n
+!aa67        read(50,*) m
+!aa67        close(50)
+!aa67     end if
 
-#ifdef USE_MPI
-     call MPI_BCast(n, 1, MPI_INTEGER, 0, MPI_COMM_FESOM_C, ierror)
-     call MPI_BCast(m, 1, MPI_INTEGER, 0, MPI_COMM_FESOM_C, ierror)
-#endif
+!aa67#ifdef USE_MPI
+!aa67     call MPI_BCast(n, 1, MPI_INTEGER, 0, MPI_COMM_FESOM_C, ierror)
+!aa67     call MPI_BCast(m, 1, MPI_INTEGER, 0, MPI_COMM_FESOM_C, ierror)
+!aa67#endif
      
-     allocate(riv_node_ob(n), riv_elev(n),riv_vt2(m),riv_vt_jd(m+1)) 
-     allocate(Tr_distr2(nsigma-1,n),Sr_distr2(nsigma-1,n))
-     allocate(Tr_distr_t2(nsigma-1,n,m),Sr_distr_t2(nsigma-1,n,m), riv_elev_t(n,m))
+!aa67     allocate(riv_node_ob(n), riv_elev(n),riv_vt2(m),riv_vt_jd(m+1)) 
+!aa67     allocate(Tr_distr2(nsigma-1,n),Sr_distr2(nsigma-1,n))
+!aa67     allocate(Tr_distr_t2(nsigma-1,n,m),Sr_distr_t2(nsigma-1,n,m), riv_elev_t(n,m))
 
 
-     if (mype==0) then
-        open(50,file=trim(meshpath)//trim(TITLE)//'_riv_ob.out', status='old')
-        read(50,*) n
-        read(50,*) m
+!aa67     if (mype==0) then
+!aa67        open(50,file=trim(meshpath)//trim(TITLE)//'_riv_ob.out', status='old')
+!aa67        read(50,*) n
+!aa67        read(50,*) m
 
-        do j=1,m
-           read(50,*) riv_vt2(j)
-           do i=1,n
-              read(50,*) riv_node_ob(i),riv_elev_t(i,j),Sr_distr_t2(1:nsigma-1,i,j),Tr_distr_t2(1:nsigma-1,i,j)
-           enddo
-        enddo
-        close(50)
+!aa67        do j=1,m
+!aa67           read(50,*) riv_vt2(j)
+!aa67           do i=1,n
+!aa67              read(50,*) riv_node_ob(i),riv_elev_t(i,j),Sr_distr_t2(1:nsigma-1,i,j),Tr_distr_t2(1:nsigma-1,i,j)
+!aa67           enddo
+!aa67        enddo
+!aa67        close(50)
 
-        Tr_distr2(:,:)=Tr_distr_t2(:,:,1)
-        Sr_distr2(:,:)=Sr_distr_t2(:,:,1) 
-        riv_elev = riv_elev_t(:,1)
-        riv_amount_ob=n
-        pr=0.0_WP
+!aa67        Tr_distr2(:,:)=Tr_distr_t2(:,:,1)
+!aa67        Sr_distr2(:,:)=Sr_distr_t2(:,:,1) 
+!aa67        riv_elev = riv_elev_t(:,1)
+!aa67        riv_amount_ob=n
+!aa67        pr=0.0_WP
 
-        do k=1,n
-           do nz=1,nsigma-1
-              tt = Tr_distr2(nz,k)
-              ss = Sr_distr2(nz,k)
-              pp = Z(nz,riv_node_ob(k))
-              Tr_distr2(nz,k)=theta(ss,tt,pp,pr)
-           enddo
-        enddo
-     end if
+!aa67        do k=1,n
+!aa67           do nz=1,nsigma-1
+!aa67              tt = Tr_distr2(nz,k)
+!aa67              ss = Sr_distr2(nz,k)
+!aa67              pp = Z(nz,riv_node_ob(k))
+!aa67              Tr_distr2(nz,k)=theta(ss,tt,pp,pr)
+!aa67           enddo
+!aa67        enddo
+!aa67     end if
 
-#ifdef USE_MPI
+!aa67#ifdef USE_MPI
+!aa67
+!aa67     call MPI_BCast(riv_node_ob(:), n, MPI_INTEGER, 0, MPI_COMM_FESOM_C, ierror)
+!aa67     call MPI_BCast(riv_elev(:), n, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
+!aa67     call MPI_BCast(riv_vt2(:), m, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
+!aa67     call MPI_BCast(riv_vt_jd(:), m+1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
+!aa67     do i=1,nsigma-1
+!aa67        call MPI_BCast(Tr_distr2(i,:), n, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
+!aa67        call MPI_BCast(Sr_distr2(i,:), n, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
+!aa67     end do
+!aa67     do i=1,nsigma-1
+!aa67        do j=1,n
+!aa67           call MPI_BCast(Tr_distr_t2(i,j,:), m, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
+!aa67           call MPI_BCast(Sr_distr_t2(i,j,:), m, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
+!aa67        end do
+!aa67     end do
+!aa67     do j=1,n
+!aa67        call MPI_BCast(riv_elev_t(i,:), m, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
+!aa67     end do
 
-     call MPI_BCast(riv_node_ob(:), n, MPI_INTEGER, 0, MPI_COMM_FESOM_C, ierror)
-     call MPI_BCast(riv_elev(:), n, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
-     call MPI_BCast(riv_vt2(:), m, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
-     call MPI_BCast(riv_vt_jd(:), m+1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
-     do i=1,nsigma-1
-        call MPI_BCast(Tr_distr2(i,:), n, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
-        call MPI_BCast(Sr_distr2(i,:), n, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
-     end do
-     do i=1,nsigma-1
-        do j=1,n
-           call MPI_BCast(Tr_distr_t2(i,j,:), m, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
-           call MPI_BCast(Sr_distr_t2(i,j,:), m, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
-        end do
-     end do
-     do j=1,n
-        call MPI_BCast(riv_elev_t(i,:), m, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
-     end do
+!aa67     !SH The global indices in these fields must be converted to local ones!!!!!
 
-     !SH The global indices in these fields must be converted to local ones!!!!!
+!aa67     allocate(mapping(nod2D))
+!aa67     mapping(:)=0
+!aa67     do i=1,myDim_nod2D+eDim_nod2D
+!aa67        ipos=myList_nod2D(i)
+!aa67        mapping(ipos)=i
+!aa67     end do
 
-     allocate(mapping(nod2D))
-     mapping(:)=0
-     do i=1,myDim_nod2D+eDim_nod2D
-        ipos=myList_nod2D(i)
-        mapping(ipos)=i
-     end do
+!aa67     !SH DAS MUSS NOCH FERTIG!!
 
-     !SH DAS MUSS NOCH FERTIG!!
+!aa67#endif 
 
-#endif 
-
-     index_nod2D(riv_node_ob)=3
-     write(*,*) 'Rivers set via OB, nodes are ', riv_node_ob
-     riv_vt_jd(1)=Time_riv_begin
-     DO i=2,m+1 
-        riv_vt_jd(i)=jdh*riv_vt2(i-1)+riv_vt_jd(i-1)
-     enddo
-     write(*,*) 'riv_vt_jd', riv_vt_jd
-  endif
+!aa67     index_nod2D(riv_node_ob)=3
+!aa67     write(*,*) 'Rivers set via OB, nodes are ', riv_node_ob
+!aa67     riv_vt_jd(1)=Time_riv_begin
+!aa67     DO i=2,m+1 
+!aa67        riv_vt_jd(i)=jdh*riv_vt2(i-1)+riv_vt_jd(i-1)
+!aa67     enddo
+!aa67     write(*,*) 'riv_vt_jd', riv_vt_jd
+!aa67  endif
 
   if (riv) then
      open(50,file=trim(meshpath)//'riv.out', status='old')
@@ -545,68 +550,69 @@ subroutine initial_riv
      read(50,*) m
      !write(*,*) 'n,m'
      allocate(riv_ind_el(n), riv_ind_eg(n), Qr(edge2D - edge2D_in),riv_vt(m),riv_vt_jd(m+1)) 
-     allocate(Tr_distr(nsigma-1,edge2D - edge2D_in),Sr_distr(nsigma-1,edge2D - edge2D_in),Qr_sig(nsigma-1,edge2D - edge2D_in))
-     allocate(Tr_distr_t(nsigma-1,n,m),Sr_distr_t(nsigma-1,n,m),Qr_sig_t(nsigma-1,n,m), Qr_t(n,m))
+!aa67     allocate(Tr_distr(nsigma-1,edge2D - edge2D_in),Sr_distr(nsigma-1,edge2D - edge2D_in),Qr_sig(nsigma-1,edge2D - edge2D_in))
+!aa67     allocate(Tr_distr_t(nsigma-1,n,m),Sr_distr_t(nsigma-1,n,m),Qr_sig_t(nsigma-1,n,m), Qr_t(n,m))
+     allocate(Qr_t(n,m))
      !write(*,*) 'alloc'
-     if ((Q_sigma).and.(Stratif_sigma)) then 
-        do j=1,m
-           read(50,*) riv_vt(j)
-           do i=1,n
-              read(50,*) riv_ind_el(i),Qr_t(i,j),Qr_sig_t(1:nsigma-1,i,j),Sr_distr_t(1:nsigma-1,i,j),Tr_distr_t(1:nsigma-1,i,j)
-           enddo
-        enddo
-        close(50)	
+!aa67     if ((Q_sigma).and.(Stratif_sigma)) then 
+!aa67        do j=1,m
+!aa67           read(50,*) riv_vt(j)
+!aa67           do i=1,n
+!aa67              read(50,*) riv_ind_el(i),Qr_t(i,j),Qr_sig_t(1:nsigma-1,i,j),Sr_distr_t(1:nsigma-1,i,j),Tr_distr_t(1:nsigma-1,i,j)
+!aa67           enddo
+!aa67        enddo
+!aa67        close(50)	
 
-     else
-	if (Q_sigma)then 
-    !write(*,*) 'Q_sigma'
-           allocate(S_t(n,m),T_t(n,m))
-           do j=1,m
-              read(50,*) riv_vt(j)
-              !write(*,*) 'riv_vt'
-              do i=1,n
-                 read(50,*) riv_ind_el(i),Qr_t(i,j),Qr_sig_t(1:nsigma-1,i,j),S_t(i,j),T_t(i,j)
-              enddo
-           enddo
-           close(50)	
-           !write(*,*) 'river file is read'
-           do j=1,nsigma-1
-              Sr_distr_t(j,:,:)=S_t
-              Tr_distr_t(j,:,:)=T_t
-           enddo
-           !write(*,*) 'river file is read 2'
-           deallocate(S_t,T_t)
+!aa67     else
+!aa67	if (Q_sigma)then 
+!aa67    !write(*,*) 'Q_sigma'
+!aa67           allocate(S_t(n,m),T_t(n,m))
+!aa67           do j=1,m
+!aa67              read(50,*) riv_vt(j)
+!aa67              !write(*,*) 'riv_vt'
+!aa67              do i=1,n
+!aa67                 read(50,*) riv_ind_el(i),Qr_t(i,j),Qr_sig_t(1:nsigma-1,i,j),S_t(i,j),T_t(i,j)
+!aa67              enddo
+!aa67           enddo
+!aa67           close(50)	
+!aa67           !write(*,*) 'river file is read'
+!aa67           do j=1,nsigma-1
+!aa67              Sr_distr_t(j,:,:)=S_t
+!aa67              Tr_distr_t(j,:,:)=T_t
+!aa67           enddo
+!aa67           !write(*,*) 'river file is read 2'
+!aa67           deallocate(S_t,T_t)
 
-	else
-           if (Stratif_sigma)then
+!aa67	else
+!aa67           if (Stratif_sigma)then
+!aa67              do j=1,m
+!aa67                 read(50,*) riv_vt(j)
+!aa67                 do i=1,n
+!aa67                    read(50,*) riv_ind_el(i),Qr_t(i,j),Sr_distr_t(1:nsigma-1,i,j),Tr_distr_t(1:nsigma-1,i,j)
+!aa67                 enddo
+!aa67              enddo
+!aa67              close(50)	
+!aa67              do j=1,nsigma-1
+!aa67                 Qr_sig_t(j,:,:)=(sigma(j) - sigma(j+1))
+!aa67              enddo
+
+!aa67           else
+!aa67              allocate(S_t(n,m),T_t(n,m))
               do j=1,m
                  read(50,*) riv_vt(j)
                  do i=1,n
-                    read(50,*) riv_ind_el(i),Qr_t(i,j),Sr_distr_t(1:nsigma-1,i,j),Tr_distr_t(1:nsigma-1,i,j)
-                 enddo
-              enddo
-              close(50)	
-              do j=1,nsigma-1
-                 Qr_sig_t(j,:,:)=(sigma(j) - sigma(j+1))
-              enddo
-
-           else
-              allocate(S_t(n,m),T_t(n,m))
-              do j=1,m
-                 read(50,*) riv_vt(j)
-                 do i=1,n
-                    read(50,*) riv_ind_el(i),Qr_t(i,j),S_t(i,j),T_t(i,j)
+                    read(50,*) riv_ind_el(i),Qr_t(i,j)   !aa67,S_t(i,j),T_t(i,j)
                  enddo
               enddo
               close(50)
-              do j=1,nsigma-1
-                 Sr_distr_t(j,:,:)=S_t
-                 Tr_distr_t(j,:,:)=T_t
-                 Qr_sig_t(j,:,:)=(sigma(j) - sigma(j+1))
-              enddo
-              deallocate(S_t,T_t)
-           endif
-        endif
+!aa67              do j=1,nsigma-1
+!aa67                 Sr_distr_t(j,:,:)=S_t
+!aa67                 Tr_distr_t(j,:,:)=T_t
+!aa67                 Qr_sig_t(j,:,:)=(sigma(j) - sigma(j+1))
+!aa67              enddo
+!aa67              deallocate(S_t,T_t)
+!aa67           endif
+!aa67        endif
      endif
      !write(*,*) 'river1'
      do i=1,n
@@ -626,9 +632,9 @@ subroutine initial_riv
 
      Qr=0.0_WP
      Qr(riv_ind_eg-edge2D_in)=Qr_t(:,1)
-     Qr_sig(:,riv_ind_eg-edge2D_in)=Qr_sig_t(:,:,1)
-     Tr_distr(:,riv_ind_eg-edge2D_in)=Tr_distr_t(:,:,1)
-     Sr_distr(:,riv_ind_eg-edge2D_in)=Sr_distr_t(:,:,1)
+!aa67     Qr_sig(:,riv_ind_eg-edge2D_in)=Qr_sig_t(:,:,1)
+!aa67     Tr_distr(:,riv_ind_eg-edge2D_in)=Tr_distr_t(:,:,1)
+!aa67     Sr_distr(:,riv_ind_eg-edge2D_in)=Sr_distr_t(:,:,1)
 
      allocate(ssin(edge2D-edge2D_in), scos(edge2D-edge2D_in), riv_w(2,edge2D-edge2D_in))
      riv_w=0.0_WP
@@ -663,10 +669,10 @@ subroutine initial_riv
            riv_w(2,riv_ind_eg(i)-edge2D_in)=0.5_WP
         endif
      enddo
-     !write(*,*) 'river4'
+     write(*,*) 'river4'
      riv_amount=n
      allocate(riv_vel(2,n))
-     allocate(riv_vel_u(1:nsigma-1,n),riv_vel_v(1:nsigma-1,n))
+!aa67     allocate(riv_vel_u(1:nsigma-1,n),riv_vel_v(1:nsigma-1,n))
      call calc_disch_node_area(1)
      !write(*,*) 'river9'
      riv_vt_jd(1)=Time_riv_begin
@@ -674,7 +680,7 @@ subroutine initial_riv
         riv_vt_jd(i)=jdh*riv_vt(i-1)+riv_vt_jd(i-1)
      enddo
      write(*,*) 'riv_vt_jd', riv_vt_jd
-  endif
+!aa67  endif
 
 end subroutine initial_riv
 
@@ -700,6 +706,7 @@ subroutine calc_disch_node_area(rk)
 ! The task of this subroutine is to distribute the total discharge on edges among nodes,
 ! additionally, distribute salinity and temperature fluxes. This subroutine is working based on
 ! weights riv_w, which were calculated in initial_riv.
+
   riv_num_nodes=riv_amount
   allocate(Calc%ci(2*riv_amount))
   allocate(Calc%cr(2*riv_amount))
@@ -712,112 +719,115 @@ subroutine calc_disch_node_area(rk)
   iln=0
   irn=0
   inds=riv_ind_eg
-!write(*,*) 'river6'
+  !write(*,*) 'river6'
   do while(any(inds>0))
-  
-  do while (inds(k)==0)
-  k=k+1
-  if (k>size(inds)) k=2
-  enddo
 
-  call  find_left_ne(riv_ind_eg, inds(k),iln,riv_amount)
-  call  find_right_ne(riv_ind_eg, inds(k),irn,riv_amount)
-  
-  if ((iln==0).and.(irn==0)) then
-  Calc%ci(indc)=inds(k)
-  Calc%cr(indc)=Qr(inds(k)-edge2D_in)
-  indc=indc+1
-  Calc%cr(indc-ind0-1)=ind0
-  Calc%cr(indc)=0.0_WP
-  indc=indc+1
-  inds(k)=0
-  riv_num_nodes=riv_num_nodes+1
-  else
-  if (iln==0) then
-  Calc%ci(indc)=inds(k)
-  Calc%cr(indc)=Qr(inds(k)-edge2D_in)
-  indc=indc+1
-  riv_num_nodes=riv_num_nodes+1
-  inds(k)=0
-  do while (irn>0) 
-  ind0=ind0+1
-  Calc%ci(indc)=inds(irn)
-  Calc%cr(indc)=Qr(inds(irn)-edge2D_in)
-  indc=indc+1
-  call  find_right_ne(riv_ind_eg, inds(irn),irn2,riv_amount)
-  inds(irn)=0
-  irn=irn2
+     do while (inds(k)==0)
+        k=k+1
+        if (k>size(inds)) k=2
+     enddo
+
+     call  find_left_ne(riv_ind_eg, inds(k),iln,riv_amount)
+     call  find_right_ne(riv_ind_eg, inds(k),irn,riv_amount)
+
+     if ((iln==0).and.(irn==0)) then
+        Calc%ci(indc)=inds(k)
+        Calc%cr(indc)=Qr(inds(k)-edge2D_in)
+        indc=indc+1
+        Calc%cr(indc-ind0-1)=ind0
+        Calc%cr(indc)=0.0_WP
+        indc=indc+1
+        inds(k)=0
+        riv_num_nodes=riv_num_nodes+1
+     else
+        if (iln==0) then
+           Calc%ci(indc)=inds(k)
+           Calc%cr(indc)=Qr(inds(k)-edge2D_in)
+           indc=indc+1
+           riv_num_nodes=riv_num_nodes+1
+           inds(k)=0
+           do while (irn>0) 
+              ind0=ind0+1
+              Calc%ci(indc)=inds(irn)
+              Calc%cr(indc)=Qr(inds(irn)-edge2D_in)
+              indc=indc+1
+              call  find_right_ne(riv_ind_eg, inds(irn),irn2,riv_amount)
+              inds(irn)=0
+              irn=irn2
+           enddo
+           Calc%cr(indc-ind0-1)=ind0
+           ind0=1
+           Calc%cr(indc)=0.0_WP
+           indc=indc+1
+        else
+           k=k+1
+           if (k>size(inds)) k=2
+        endif
+     endif
   enddo
-  Calc%cr(indc-ind0-1)=ind0
-  ind0=1
-  Calc%cr(indc)=0.0_WP
-  indc=indc+1
-  else
-  k=k+1
-  if (k>size(inds)) k=2
+  if (rk<2) then
+!aa67        allocate (Tr_node_sig(nsigma-1,riv_num_nodes),Sr_node_sig(nsigma-1,riv_num_nodes), riv_node(riv_num_nodes))
+!aa67       allocate(Qr_node(riv_num_nodes),Qr_node_sig(nsigma-1,riv_num_nodes))
+     allocate (riv_node(riv_num_nodes))
+     allocate(Qr_node(riv_num_nodes))
   endif
-  endif
-  enddo
-if (rk<2) then
-   allocate (Tr_node_sig(nsigma-1,riv_num_nodes),Sr_node_sig(nsigma-1,riv_num_nodes), riv_node(riv_num_nodes))
-  allocate(Qr_node(riv_num_nodes),Qr_node_sig(nsigma-1,riv_num_nodes))
-endif
   k=2
   ind0=1
 
   do while (k<=riv_num_nodes)
-  riv_node(ind0)=edge_nodes(1,Calc%ci(k))
-!write(*,*) 'ed_nod1', edge_nodes(1,int(Calc%ci(k))),k,ind0, riv_node(ind0)
-  Qr_node(ind0)=Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)
-  Qr_node_sig(:,ind0)=Qr_node(ind0)*Qr_sig(:,Calc%ci(k)-edge2D_in)
-  Tr_node_sig(:,ind0)=Qr_node_sig(:,ind0)*Tr_distr(:,Calc%ci(k)-edge2D_in)
-  Sr_node_sig(:,ind0)=Qr_node_sig(:,ind0)*Sr_distr(:,Calc%ci(k)-edge2D_in)
-  ind0=ind0+1
-  k=k+1
-  do while (Calc%ci(k)>0.0_WP)
-  riv_node(ind0)=edge_nodes(1,int(Calc%ci(k)))
-!write(*,*) 'ed_nod2', edge_nodes(1,int(Calc%ci(k))),k, ind0, riv_node(ind0)
-  Qr_node(ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)+Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)
-  Qr_node_sig(:,ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)*Qr_sig(:,Calc%ci(k-1)-edge2D_in)&
-  +Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)*Qr_sig(:,Calc%ci(k)-edge2D_in)
-  Tr_node_sig(:,ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)*Qr_sig(:,Calc%ci(k-1)-edge2D_in)&
- *Tr_distr(:,Calc%ci(k-1)-edge2D_in)+Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)&
- *Qr_sig(:,Calc%ci(k)-edge2D_in)*Tr_distr(:,Calc%ci(k)-edge2D_in)
-  Sr_node_sig(:,ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)&
-  *Qr_sig(:,Calc%ci(k-1)-edge2D_in)*Sr_distr(:,Calc%ci(k-1)-edge2D_in) &
-  +Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)*Qr_sig(:,Calc%ci(k)-edge2D_in)*Sr_distr(:,Calc%ci(k)-edge2D_in)
-  ind0=ind0+1
-  k=k+1
-  enddo
-  riv_node(ind0)=edge_nodes(2,int(Calc%ci(k-1)))
-!write(*,*) 'ed_nod3', edge_nodes(2,int(Calc%ci(k-1))),k, ind0, riv_node(ind0)
-  Qr_node(ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)
-  Qr_node_sig(:,ind0)=Qr_node(ind0)*Qr_sig(:,Calc%ci(k-1)-edge2D_in)
-  Tr_node_sig(:,ind0)=Qr_node_sig(:,ind0)*Tr_distr(:,Calc%ci(k-1)-edge2D_in)
-  Sr_node_sig(:,ind0)=Qr_node_sig(:,ind0)*Sr_distr(:,Calc%ci(k-1)-edge2D_in)
-  ind0=ind0+1
-  k=k+1
+     riv_node(ind0)=edge_nodes(1,Calc%ci(k))
+     !write(*,*) 'ed_nod1', edge_nodes(1,int(Calc%ci(k))),k,ind0, riv_node(ind0)
+     Qr_node(ind0)=Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)
+!aa67       Qr_node_sig(:,ind0)=Qr_node(ind0)*Qr_sig(:,Calc%ci(k)-edge2D_in)
+!aa67       Tr_node_sig(:,ind0)=Qr_node_sig(:,ind0)*Tr_distr(:,Calc%ci(k)-edge2D_in)
+!aa67       Sr_node_sig(:,ind0)=Qr_node_sig(:,ind0)*Sr_distr(:,Calc%ci(k)-edge2D_in)
+     ind0=ind0+1
+     k=k+1
+     do while (Calc%ci(k)>0.0_WP)
+        riv_node(ind0)=edge_nodes(1,int(Calc%ci(k)))
+        !write(*,*) 'ed_nod2', edge_nodes(1,int(Calc%ci(k))),k, ind0, riv_node(ind0)
+        Qr_node(ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)+Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)
+!aa67          Qr_node_sig(:,ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)*Qr_sig(:,Calc%ci(k-1)-edge2D_in)&
+!aa67          +Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)*Qr_sig(:,Calc%ci(k)-edge2D_in)
+!aa67          Tr_node_sig(:,ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)*Qr_sig(:,Calc%ci(k-1)-edge2D_in)&
+!aa67         *Tr_distr(:,Calc%ci(k-1)-edge2D_in)+Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)&
+!aa67         *Qr_sig(:,Calc%ci(k)-edge2D_in)*Tr_distr(:,Calc%ci(k)-edge2D_in)
+!aa67          Sr_node_sig(:,ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)&
+!aa67          *Qr_sig(:,Calc%ci(k-1)-edge2D_in)*Sr_distr(:,Calc%ci(k-1)-edge2D_in) &
+!aa67          +Calc%cr(k)*riv_w(1,Calc%ci(k)-edge2D_in)*Qr_sig(:,Calc%ci(k)-edge2D_in)*Sr_distr(:,Calc%ci(k)-edge2D_in)
+        ind0=ind0+1
+        k=k+1
+     enddo
+     riv_node(ind0)=edge_nodes(2,int(Calc%ci(k-1)))
+     !write(*,*) 'ed_nod3', edge_nodes(2,int(Calc%ci(k-1))),k, ind0, riv_node(ind0)
+     Qr_node(ind0)=Calc%cr(k-1)*riv_w(2,Calc%ci(k-1)-edge2D_in)
+!aa67       Qr_node_sig(:,ind0)=Qr_node(ind0)*Qr_sig(:,Calc%ci(k-1)-edge2D_in)
+!aa67       Tr_node_sig(:,ind0)=Qr_node_sig(:,ind0)*Tr_distr(:,Calc%ci(k-1)-edge2D_in)
+!aa67       Sr_node_sig(:,ind0)=Qr_node_sig(:,ind0)*Sr_distr(:,Calc%ci(k-1)-edge2D_in)
+     ind0=ind0+1
+     k=k+1
   enddo
   write(*,*)'Rivers set via SB, elements are', riv_ind_eg
   !write(*,*) 'Qr_node', riv_num_nodes,Qr_node
-write(*,*) 'riv_node',riv_node
- ! write(*,*) 'discharge', sum (Qr_sig(:,riv_ind_eg(1)-edge2D_in)),sum (Qr_sig(:,riv_ind_eg(2)-edge2D_in)),&
-!sum (Qr_sig(:,riv_ind_eg(3)-edge2D_in)),sum (Qr_sig(:,riv_ind_eg(4)-edge2D_in)),&
-!sum (Qr_sig(:,riv_ind_eg(5)-edge2D_in)),sum (Qr_sig(:,riv_ind_eg(6)-edge2D_in)),Qr_node_sig
-write(*,*) 'discharge',sum(Qr_node_sig(:,:)),sum(Qr_node), Qr_node !, Qr(riv_ind_eg-edge2D_in)
-!write(*,*) 'river8', Sr_distr(:,riv_ind_eg-edge2D_in)
+  write(*,*) 'riv_node',riv_node
+  ! write(*,*) 'discharge', sum (Qr_sig(:,riv_ind_eg(1)-edge2D_in)),sum (Qr_sig(:,riv_ind_eg(2)-edge2D_in)),&
+  !sum (Qr_sig(:,riv_ind_eg(3)-edge2D_in)),sum (Qr_sig(:,riv_ind_eg(4)-edge2D_in)),&
+  !sum (Qr_sig(:,riv_ind_eg(5)-edge2D_in)),sum (Qr_sig(:,riv_ind_eg(6)-edge2D_in)),Qr_node_sig
+!aa67   write(*,*) 'discharge',sum(Qr_node_sig(:,:)),sum(Qr_node), Qr_node !, Qr(riv_ind_eg-edge2D_in)
+  !write(*,*) 'river8', Sr_distr(:,riv_ind_eg-edge2D_in)
 
-!  write(*,*) 'Qr_sig', Qr_sig
+  !  write(*,*) 'Qr_sig', Qr_sig
   deallocate(Calc%ci,Calc%cr)
-pr=0.0_WP
-     do n=1,riv_num_nodes
-    do nz=1,nsigma-1
-     tt = Tr_node_sig(nz,n)/Qr_node_sig(nz,n)
-     ss = Sr_node_sig(nz,n)/Qr_node_sig(nz,n)
-     pp = Z(nz,riv_node(n))
-     Tr_node_sig(nz,n)=theta(ss,tt,pp,pr)*Qr_node_sig(nz,n)
-    enddo
-   enddo
+  pr=0.0_WP
+!aa67       do n=1,riv_num_nodes
+!aa67      do nz=1,nsigma-1
+!aa67       tt = Tr_node_sig(nz,n)/Qr_node_sig(nz,n)
+!aa67       ss = Sr_node_sig(nz,n)/Qr_node_sig(nz,n)
+!aa67       pp = Z(nz,riv_node(n))
+!aa67       Tr_node_sig(nz,n)=theta(ss,tt,pp,pr)*Qr_node_sig(nz,n)
+!aa67      enddo
+!aa67     enddo
+
 end subroutine calc_disch_node_area
 
 subroutine initial_state_wind

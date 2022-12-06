@@ -15,7 +15,9 @@
 ! ========================================================================
 
 module g_comm
+
 implicit none
+
 contains
 
 #ifdef DEBUG
@@ -689,6 +691,9 @@ if (npes> 1) then
 
          ! Check MPI point-to-point communication for consistency
 #ifdef DEBUG
+
+!SH print *,'elem3D exchange POS1 ubound', ubound(elem_array3D,1), myDim_elem2D+eDim_elem2D+eXDim_elem2D
+
          call check_mpi_comm(rn, sn, r_mpitype_elem3D(:,nl1,1), s_mpitype_elem3D(:,nl1,1), &
               com_elem2D%rPE, com_elem2D%sPE)
 #endif
@@ -709,6 +714,8 @@ if (npes> 1) then
 
          ! Check MPI point-to-point communication for consistency
 #ifdef DEBUG
+
+!SH print *,'elem2D exchange POS2 ubound', ubound(elem_array3D,1), myDim_elem2D+eDim_elem2D+eXDim_elem2D
          call check_mpi_comm(rn, sn, r_mpitype_elem2D(:,nl1), s_mpitype_elem2D(:,nl1), &
               com_elem2D%rPE, com_elem2D%sPE)
 #endif
@@ -739,6 +746,7 @@ if (npes> 1) then
       rn=com_elem2D_full%rPEnum
 
       if (nl1==nsigma .or. nl1==nsigma-1) then
+
          ! Check MPI point-to-point communication for consistency
 #ifdef DEBUG
          call check_mpi_comm(rn, sn, r_mpitype_elem3D_full(:,nl1,1), &
@@ -898,8 +906,8 @@ USE o_MESH
 USE g_PARSUP 
 IMPLICIT NONE
 
-! General version of the communication routine for 3D elemental fields
-! stored in (vertical, horizontal) format
+! General version of the communication routine for 2D elemental fields
+! (1-dimensional arrays)
  
  real(kind=WP), intent(inout) :: elem_array2D(:) 
 
@@ -934,6 +942,9 @@ IMPLICIT NONE
 
      ! Check MPI point-to-point communication for consistency
 #ifdef DEBUG
+
+!SH print *,'elem2D exchange POS1 ubound', ubound(elem_array2D,1), myDim_elem2D+eDim_elem2D+eXDim_elem2D
+
      call check_mpi_comm(rn, sn, r_mpitype_elem2D(:,1), s_mpitype_elem2D(:,1), &
           com_elem2D%rPE, com_elem2D%sPE)
 #endif
@@ -957,6 +968,9 @@ IMPLICIT NONE
 
      ! Check MPI point-to-point communication for consistency
 #ifdef DEBUG
+
+!SH print *,'elem2D exchange POS2 ubound', ubound(elem_array2D,1), myDim_elem2D+eDim_elem2D+eXDim_elem2D
+
      call check_mpi_comm(rn, sn, r_mpitype_elem2D_full(:,1), s_mpitype_elem2D_full(:,1), &
           com_elem2D_full%rPE, com_elem2D_full%sPE)
 #endif

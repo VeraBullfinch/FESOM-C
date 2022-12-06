@@ -67,6 +67,8 @@ MODULE fv_sbc
    USE o_MESH
    USE o_PARAM
 
+   USE g_parsup
+
 !   USE ncar_ocean_fluxes_mode
 
    IMPLICIT NONE
@@ -243,25 +245,27 @@ CONTAINS
       integer              :: sbc_alloc                   !: allocation status
 
 
-
       !open file
+
+
       iost = nf_open(flf%file_name,NF_NOWRITE,ncid)
       call check_nferr(iost,flf%file_name)
-
+      
       ! get dimensions
-      iost = nf_inq_dimid(ncid, "lat", id_latd)
+      iost = nf_inq_dimid(ncid, "latitude", id_latd)
       call check_nferr(iost,flf%file_name)
-      iost = nf_inq_dimid(ncid, "lon", id_lond)
+
+      iost = nf_inq_dimid(ncid, "longitude", id_lond)
       call check_nferr(iost,flf%file_name)
       iost = nf_inq_dimid(ncid, "time", id_timed)
       call check_nferr(iost,flf%file_name)
-
+      
       ! get variable id
-!      iost = nf_inq_varid(ncid, "air", id_data)
-!      call check_nferr(iost,flf%file_name)
-      iost = nf_inq_varid(ncid, "lon", id_lon)
+      ! iost = nf_inq_varid(ncid, "air", id_data)
+      ! call check_nferr(iost,flf%file_name)
+      iost = nf_inq_varid(ncid, "longitude", id_lon)
       call check_nferr(iost,flf%file_name)
-      iost = nf_inq_varid(ncid, "lat", id_lat)
+      iost = nf_inq_varid(ncid, "latitude", id_lat)
       call check_nferr(iost,flf%file_name)
       iost = nf_inq_varid(ncid, "time", id_time)
       call check_nferr(iost,flf%file_name)
@@ -274,11 +278,11 @@ CONTAINS
       call check_nferr(iost,flf%file_name)
 
       ALLOCATE( nc_lon(nc_Nlon), nc_lat(nc_Nlat), nc_time(nc_Ntime),&
-                &      STAT=sbc_alloc )
+           &      STAT=sbc_alloc )
       if( sbc_alloc /= 0 )   STOP 'read_sbc: failed to allocate arrays'
 
-   !read variables from file
-   ! coordinates
+      !read variables from file
+      ! coordinates
       nf_start(1)=1
       nf_edges(1)=nc_Nlat
       iost = nf_get_vara_double(ncid, id_lat, nf_start, nf_edges, nc_lat)
@@ -291,16 +295,16 @@ CONTAINS
       nf_edges(1)=nc_Ntime
       iost = nf_get_vara_double(ncid, id_time, nf_start, nf_edges, nc_time)
       call check_nferr(iost,flf%file_name)
-
+      
       ! convert time to days
- !!NCEP     nc_time = nc_time / 24.0 + julday(1800,1,1)
+      !!NCEP     nc_time = nc_time / 24.0 + julday(1800,1,1)
       nc_time = nc_time / nm_nc_secstep + julday(nm_nc_iyear,nm_nc_imm,nm_nc_idd)
 !!! WARNING : move time forward for dt/2 , last is a last+dt from last -1
       if (nc_Ntime > 1) then
          do i = 1, nc_Ntime-1
             nc_time(i) = (nc_time(i+1) + nc_time(i))/2.0
          end do
-
+            
          nc_time(nc_Ntime) = nc_time(nc_Ntime) + (nc_time(nc_Ntime) - nc_time(nc_Ntime-1))/2.0
       end if
       !flip lat and data in case of lat from -90 to 90
@@ -314,14 +318,13 @@ CONTAINS
          endif
       endif
 
-
-
-!      iost = nf_get_att(ncid, id_time, "units",att_string)
-!      call check_nferr(iost,flf%file_name)
-!      write(*,*) iost
-!      write(*,*) att_string
+      !      iost = nf_get_att(ncid, id_time, "units",att_string)
+      !      call check_nferr(iost,flf%file_name)
+      !      write(*,*) iost
+      !      write(*,*) att_string
       iost = nf_close(ncid)
       call check_nferr(iost,flf%file_name)
+
    END SUBROUTINE nc_readTimeGrid
 
    SUBROUTINE nc_sbc_ini_fillnames(yyear)
@@ -330,14 +333,14 @@ CONTAINS
       !! ** Purpose : Fill names of sbc_flfi array (file names and variable names)
 
       !prepare proper nc file (add year and .nc to the end of the file name from namelist
-      write(sbc_flfi(i_xwind)%file_name,*) trim(nm_xwind_file),yyear,'.nc'
-      write(sbc_flfi(i_ywind)%file_name,*) trim(nm_ywind_file),yyear,'.nc'
-      write(sbc_flfi(i_humi)%file_name, *) trim(nm_humi_file),yyear,'.nc'
-      write(sbc_flfi(i_qsr)%file_name, *) trim(nm_qsr_file),yyear,'.nc'
-      write(sbc_flfi(i_qlw)%file_name, *) trim(nm_qlw_file),yyear,'.nc'
-      write(sbc_flfi(i_tair)%file_name, *) trim(nm_tair_file),yyear,'.nc'
-      write(sbc_flfi(i_prec)%file_name, *) trim(nm_prec_file),yyear,'.nc'
-      write(sbc_flfi(i_mslp)%file_name, *) trim(nm_mslp_file),yyear,'.nc'
+      write(sbc_flfi(i_xwind)%file_name,*) trim(nm_xwind_file)  !,yyear,'.nc'
+      write(sbc_flfi(i_ywind)%file_name,*) trim(nm_ywind_file)  !,yyear,'.nc'
+      write(sbc_flfi(i_humi)%file_name, *) trim(nm_humi_file)  !,yyear,'.nc'
+      write(sbc_flfi(i_qsr)%file_name, *) trim(nm_qsr_file)  !,yyear,'.nc'
+      write(sbc_flfi(i_qlw)%file_name, *) trim(nm_qlw_file)  !,yyear,'.nc'
+      write(sbc_flfi(i_tair)%file_name, *) trim(nm_tair_file)  !,yyear,'.nc'
+      write(sbc_flfi(i_prec)%file_name, *) trim(nm_prec_file)  !,yyear,'.nc'
+      write(sbc_flfi(i_mslp)%file_name, *) trim(nm_mslp_file)  !,yyear,'.nc'
       if (nm_calc_flux==1) then
          write(sbc_flfi(i_cloud)%file_name, *) trim(nm_cloud_file),yyear,'.nc'
       end if
@@ -397,7 +400,6 @@ CONTAINS
 ! used to inerpolate on nodes
       warn = 0
 
-
       ! get ini year; Fill names of sbc_flfi
       call calendar_date(idate,yyyy,dd,mm)
       write(yyear,"(I4)") yyyy
@@ -406,9 +408,8 @@ CONTAINS
       ! we assume that all NetCDF files have identical grid and time variable
       call nc_readTimeGrid(sbc_flfi(i_xwind))
 
-
       ! prepare nearest coordinates in INfile , save to bilin_indx_i/j
-      do i = 1, nod2D
+      do i = 1, myDim_nod2D+eDim_nod2D
 !         ! get coordinates of elements
 !         elnodes = elem2D_nodes(:,i) !! 4 nodes in element
 !         numnodes = 4
@@ -476,6 +477,7 @@ CONTAINS
       IMPLICIT NONE
 
       integer             :: i
+      integer             :: num, n
       real(wp)            :: rtmp    ! temporal real
       real(wp)            :: wndm    ! delta of wind module and ocean curent module
       real(wp)            :: wdx,wdy ! delta of wind x/y and ocean curent x/y
@@ -508,8 +510,27 @@ CONTAINS
          else
 ! WARNING:: surface curent U and V should be used here, while it should be interpolate by compute_el2nodes_2D_2fields from fv_utilit
 !           so if u use type_task = 1 and winds you are welcome to add some code
-            wdx = atmdata(i_xwind,i)! - U_n_2D(1,i) ! wind from data - ocean current ( x direction)
-            wdy = atmdata(i_ywind,i)! - U_n_2D(2,i) ! wind from data - ocean current ( y direction)
+            ! convert 2D velocity on element to nodes (wdx), than modify wdx by
+            ! this value
+            n = i
+
+            num = nod_in_elem2D_num(n)
+            wdx = sum(U_n_2D(1,nod_in_elem2D(1:num,n))*elem_area(nod_in_elem2D(1:num,n))) &
+                                                  /sum(elem_area(nod_in_elem2D(1:num,n)))
+            wdy = sum(U_n_2D(2,nod_in_elem2D(1:num,n))*elem_area(nod_in_elem2D(1:num,n))) &
+                                                  /sum(elem_area(nod_in_elem2D(1:num,n)))
+           ! if (i == 10000) then
+           !  write(*,*) "wdx = ", wdx, " U = ",maxval(U_n_2D(1,nod_in_elem2D(1:num,n)))
+           ! end if
+            wdx = atmdata(i_xwind,i) - wdx !- U_n_2D(1,i) ! wind from data - ocean current ( x direction)
+           ! if (i == 10000) then
+           !   write(*,*) "wdx_cor = ", wdx
+           ! end if
+            wdy = atmdata(i_ywind,i) - wdy !- U_n_2D(2,i) ! wind from data - ocean current ( y direction)     \
+
+            !SH Original part remove if it works
+            !SH wdx = atmdata(i_xwind,i)! - U_n_2D(1,i) ! wind from data - ocean current ( x direction)
+            !SH wdy = atmdata(i_ywind,i)! - U_n_2D(2,i) ! wind from data - ocean current ( y direction)
          endif
          wndm = SQRT( wdx * wdx + wdy * wdy )
 !      call ncar_ocean_fluxes (wndm, atmdata(i_tair,i), ts, q, qs, z, avail, &
@@ -856,7 +877,7 @@ CONTAINS
          ! data is assumed to be sampled on a regular grid
 !!$OMP PARALLEL
 !!$OMP DO
-         do ii = 1, nod2D
+         do ii = 1, myDim_nod2D+eDim_nod2D
             i = bilin_indx_i(ii)
             j = bilin_indx_j(ii)
             ip1 = i + 1
@@ -955,7 +976,7 @@ CONTAINS
       now_date = rdate
 !!$OMP PARALLEL
 !!$OMP DO
-      do i = 1, nod2D
+      do i = 1, myDim_nod2D+eDim_nod2D
          do fld_idx = 1, i_totfl
 
             atmdata(fld_idx,i) = now_date * coef_a(fld_idx,i) + coef_b(fld_idx,i)
@@ -975,7 +996,6 @@ CONTAINS
       !! ** Action  :
       !!----------------------------------------------------------------------
       IMPLICIT NONE
-
       integer            :: idate ! initialization date
       integer            :: isec  ! initialization seconds
       integer            :: iost  ! I/O status
@@ -983,6 +1003,7 @@ CONTAINS
 
       real(wp)           :: tx, ty
 
+      integer            :: node_size
 
 
       namelist/nam_sbc/ nm_sbc, nm_tauwind, nm_xwind0, nm_ywind0, nm_sbc_ftype, &
@@ -996,6 +1017,8 @@ CONTAINS
                         nm_nc_secstep, nm_nc_iyear, nm_nc_imm, nm_nc_idd
 
       write(*,*) "Start: Ocean forcing inizialization."
+
+      node_size = myDim_nod2D+eDim_nod2D
 
       idate = time_jd0
       isec  = 86400.0 *(time_jd0 - idate)
@@ -1058,13 +1081,15 @@ CONTAINS
       write(*,*) "      nm_nc_imm     = ", nm_nc_imm ," ! initial month of time axis in netCDF "
       write(*,*) "      nm_nc_idd     = ", nm_nc_idd ," ! initial day of time axis in netCDF "
       write(*,*) "      nm_calc_flux  = ", nm_calc_flux ,"! 1= calculate I0,... (GOTM, 0= use atm. model fluxes"
-      ALLOCATE( coef_a(i_totfl,nod2D), coef_b(i_totfl,nod2D), &
-              & atmdata(i_totfl,nod2D), &
+      ALLOCATE( coef_a(i_totfl,node_size), coef_b(i_totfl,node_size), &
+              & atmdata(i_totfl,node_size), &
                    &      STAT=sbc_alloc )
       if( sbc_alloc /= 0 )   STOP 'sbc_ini: failed to allocate arrays'
 
-      ALLOCATE( bilin_indx_i(nod2D),bilin_indx_j(nod2D), &
-              & qns(nod2D), emp(nod2D), qsr(nod2D),  &
+
+
+      ALLOCATE( bilin_indx_i(node_size),bilin_indx_j(node_size), &
+              & qns(node_size), emp(node_size), qsr(node_size),  &
                    &      STAT=sbc_alloc )
 !              & qns_2(nod2D), emp_2(nod2D), qsr_2(nod2D),  &
 !              & taux_node_2(nod2D), tauy_node_2(nod2D),  &
@@ -1097,6 +1122,8 @@ CONTAINS
             windy = nm_ywind0
          endif
       endif
+
+
 ! ========================== ASCII PART start===============================================================
 ! OPEN ASCII file with winds if needed and check number of nodes/elements (elem2D)
       if( nm_sbc == 2 .AND. nm_sbc_ftype == 1 ) then
@@ -1104,9 +1131,10 @@ CONTAINS
             write(*,*) "This function not implemented yet.nm_sbc == 2  nm_sbc_ftype == 1 nm_tauwind == 2 "
             STOP "ERROR: sbc_ini"
          endif
-         call ascii_sbc_ini(idate,isec)
-      endif
 
+         call ascii_sbc_ini(idate,isec)
+
+      endif
 ! ========================== NC PART start===============================================================
       if( nm_sbc == 2 .AND. nm_sbc_ftype == 2 ) then
          call nc_sbc_ini(idate,isec)
@@ -1205,6 +1233,7 @@ CONTAINS
          end if
 
         !put new (interpolated on a new date) values to taux and tauy
+
          call data2tau_interp(rdate,rsec)
 
       else
@@ -1214,6 +1243,7 @@ CONTAINS
             ! IF more field available
             if( time_jd > nc_time(t_indx_p1) ) then
                ! get new coefficients for time interpolation on model grid for all data
+!write(*,*) 'ini0'
                call getcoeffld(time_jd)
             endif
          endif
@@ -1221,8 +1251,10 @@ CONTAINS
          call data_timeinterp(time_jd)
          ! change model ocean parameters
          if (nm_calc_flux==1) then
+!write(*,*) 'ini01'
             call apply_atm_fluxes_gotm(time_jd)
          else
+!write(*,*) 'ini1'
             call apply_atm_fluxes
          end if
 
@@ -1253,8 +1285,10 @@ CONTAINS
             datewy_f = datewy_s
             secwx_f  = secwx_s
             secwy_f  = secwy_s
+
             call read_sbc_ascii(xwind_file_unit,nod2D,datawx_s,datewx_s,secwx_s,iost)
             call read_sbc_ascii(ywind_file_unit,nod2D,datawy_s,datewy_s,secwy_s,iost2)
+
          enddo
          ! check if reach end of file than use previews field as a constant
          if( (iost == END_OF_FILE) .or. (iost2 == END_OF_FILE) ) then

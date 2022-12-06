@@ -249,6 +249,10 @@ SUBROUTINE read_mesh_par
   print *,'PE: ',mype,' Local number of open boundary nodes: ',mynobn
      
   !VF, create in_obn array with OBN indexes
+  ! MPI fields:
+  ! mynobn : local number of open boundary nodes
+  ! my_in_obn : field of local obn number
+  ! my_in_obn_idx : field of global indexes of open bnd. nodes
   if (mynobn>0) then
      allocate(my_in_obn(mynobn), my_in_obn_idx(mynobn))
      my_in_obn(:)=0; my_in_obn_idx(:)=0
@@ -257,16 +261,10 @@ SUBROUTINE read_mesh_par
         if (index_nod2D(n)==2) then
            ind=ind+1
            my_in_obn(ind)=n
-           !do k=1,nobn
-           !   if (myList_nod2D(n)==in_obn(k)) then
-           !      my_in_obn_idx(ind)=k
-           !      exit
-           !   end if
-           !end do
-           !if (my_in_obn_idx(ind)==0) print *,'WARNING: open bnd index discrepancy'
         endif
      end do
   end if
+  ! The global indexes are set later on in the main program
 
   if (mynobn>0 .AND. ind/=mynobn) print *,'ATTENTION: boundary node discrepancy'
   if (mynobn>10) print *,'global nodes MY_IN_OBN(1:10):',mype,myList_nod2D(my_in_obn(1:10))
@@ -421,9 +419,9 @@ print *,'READING',mype,myDim_elem2D,eDim_elem2D,eXDim_elem2D
               read(22,*) rbuff(n,1)
            end do
 !SHTEST TOPOGRAPHY
-!do n=1,k
-!  if (rbuff(n,1)<10.0) rbuff(n,1)=10.0
-!end do
+do n=1,k
+  if (rbuff(n,1)<10.0) rbuff(n,1)=10.0
+end do
         end if
         call MPI_BCast(rbuff(1:k,1), k, MPI_DOUBLE_PRECISION, 0, MPI_COMM_FESOM_C, ierror)
 
