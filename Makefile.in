@@ -1,0 +1,45 @@
+
+# Gnu Fortran compiler and compiler flags
+FC = ifort
+CC = icc
+# Linker
+LINK = $(FC)
+# Archiver, for libturbulence.a
+#AR = xiar
+
+## OPTIONS FOR OPTIMIZATION
+#FCFLAGS = -O3 -ffast-math -march=native -funroll-loops
+## OPTIONS FOR OPTIMIZATION AND OPENMP
+#FCFLAGS = -O3 -ffast-math -march=native -funroll-loops #-fopenmp
+FCFLAGS =  -O3 -ipo -xHost -openmp
+## OPTIONS FOR DEBUGGING
+#FCFLAGS = -g -fbounds-check -fbacktrace
+CCFLAGS = $(FCFLAGS)
+
+## PATH TO GOTM TURBULENCE
+GOTMDIR      = $(PWD)/turbulence
+GOTMLIB       =  -L$(GOTMDIR)/lib -lturbulence
+GOTMINCS      = -I$(GOTMDIR)
+
+## PATH TO NETCDF
+#NETCDFINC = -I/usr/include
+#NETCDFLIB = -L/usr/lib64 -lnetcdf -lnetcdff
+NETCDFINC=-I$(NETCDF_INC)
+NETCDFLIB = -L$(NETCDF_LIB) -lnetcdf -lnetcdff
+
+## on SGI UV100 at AWI:
+# NETCDFINC = -I/uv/soft/netcdf/3.6.3-gnu/include
+# NETCDFLIB = -L/uv/soft/netcdf/3.6.3-gnu/lib -lnetcdf
+# on Cray CS400 Ollie at AWI:
+#NETCDFINC = -I/global/AWIsoft/netcdf/4.4.0_intel/include
+#NETCDFLIB = -L/global/AWIsoft/netcdf/4.4.0_intel/lib -lnetcdff -lnetcdf  -lcurl -lgfortran -lhdf5_hl 
+
+# METISLIB, only for initialization of MPI domain decomposition
+#METISINC = -I/opt/metis/include
+#METISLIB = /opt/metis/lib/libmetis.a
+
+# NAME OF THE EXECUTABLES
+EXE = fesom_coast.exe
+EXE_INI = fv_ini.x
+
+
