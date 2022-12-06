@@ -1,5 +1,5 @@
 !==============================================================================!
-!   INPUT FILE FOR PARAMETERS and FLAGS, FVOM model                            !
+!   INPUT FILE FOR PARAMETERS and FLAGS, FESOM-C model                            !
 !                                                                              !
 !   FORMAT&RULES:			                                                   !
 !       1.) VARIABLE  = VALUE  (EQUAL SIGN MUST BE USED)                       !
