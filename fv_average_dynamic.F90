@@ -15,12 +15,37 @@
   ! The depth is estimated at elements
   ! c1 is -u_n*L_left*d1, c2  -u_n*L_right*d1
 
-  integer        :: ed, el(2), elem, j, n, q, i
+  integer        :: ed, el(2), elem, j, n, q, i, k, fid
   real(kind=WP)  :: c1(myDim_edge2D+eDim_edge2D)
   real(Kind=WP)  :: aux_elem(myDim_elem2D+eDim_elem2D+eXDim_elem2D)
   !SH Test
   real(Kind=WP)  :: ttldep, aux_depAB(4,myDim_elem2D)
   integer :: edglim
+
+  real(Kind=WP)  :: damping ! Damping for slow spinup at open bnd
+
+!!$!SH CAUTION REMOVE THIS BLOCK>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+!!$!if (sk .le. 968 .or. sk .gt. 2440) then
+!!$!$OMP PARALLEL DEFAULT(SHARED) PRIVATE(elem,wdx,wdy,wndm,rtmp)
+!!$!OMP DO
+!!$do elem=1,elem2D
+!!$     wdx = 0.0_WP - U_n_2D(1,elem) ! icedrift - ocean current ( x direction)
+!!$     wdy = 0.0_WP - U_n_2D(2,elem) ! icedrift - ocean current ( y direction)
+!!$     wndm = SQRT( wdx * wdx + wdy * wdy )
+!!$     rtmp = wndm * 0.0055_WP  ! from fesom2, Cd=5.5*10-3 , https://doi.org/10.1175/JPO-D-18-0185.1
+!!$
+!!$     taux(elem) = rtmp * wdx  ! new taux (stress along x)
+!!$     tauy(elem) = rtmp * wdy  ! new tauy (stress along y)
+!!$
+!!$!     windx(i)=30.0_WP*wdx !only for turbulence, density of air/ice 1000 ->100 WHY????
+!!$!     windy(i)=30.0_WP*wdy !only for turbulence
+!!$
+!!$  enddo
+!!$!OMP END DO
+!!$!$OMP END PARALLEL
+!!$!endif
+!!$!SH CAUTION REMOVE THIS BLOCK<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
 
   do i=1,myDim_edge2D+eDim_edge2D
      C1(i)=0.0_WP
@@ -60,7 +85,9 @@
      aux_elem(elem) = w_cv(1,elem)*aux_depAB(1,elem) +  w_cv(2,elem)*aux_depAB(2,elem) + &
                       w_cv(3,elem)*aux_depAB(3,elem) +  w_cv(4,elem)*aux_depAB(4,elem)
   END DO
+
 !$OMP END DO
+!!$print *,'AUX_ELEM',minval(aux_elem(:)),maxval(aux_elem(:))
 
 #ifdef USE_MPI
   call exchange_elem(aux_elem)
@@ -96,6 +123,7 @@
             + (-UAB(2,el(2))*edge_cross_dxdy(3,ed) + UAB(1,el(2))*edge_cross_dxdy(4,ed)) *aux_elem(el(2))
 
   END DO
+!!$print *,'C1_VALUES',minval(c1(:)),maxval(c1(:))
 
 !$OMP END DO NOWAIT
 
@@ -129,10 +157,10 @@
           -UAB(1,edge_tri(1,ed))*edge_cross_dxdy(2,ed) ) * aux_elem(edge_tri(1,ed))
 !if (abs(c1(ed))>1.e-20) print *,'HUAA', ed,c1(ed)
   END DO
+
 !$OMP END DO
 
 #endif
-
 
 !!SH print *,'EDGES TEST',mype,minval(c1),maxval(c1)
 
@@ -154,27 +182,108 @@
 !SH SKIPPED FOR NOW        ssh_rhs(riv_node(n)) = ssh_rhs(riv_node(n))+Qr_node(n)
 !SH SKIPPED FOR NOW     END DO
   endif
+!!$print *,'SSH_RHS555',minval(ssh_rhs(:)),maxval(ssh_rhs(:))
 
   !    open boundary nodes
   !NROMP   Build index array for open boundary nodes, to simplify and parallelize this loop.
   !VF, TF_presence....., ssh_rhs
   if (TF_presence .and. mynobn>0)  then
 
-     ssh_rhs(my_in_obn)=0.0_WP
+     ssh_rhs(my_in_obn(:))=0.0_WP
 
-!!$OMP PARALLEL PRIVATE(n,q)
-!!$OMP DO
+!SH THIS BLOCK WAS USED FOR CHILE>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+!$OMP PARALLEL PRIVATE(n,q)
+!$OMP DO
+
+
+     !SH ADJUST THE DAMPING IF NEEDED
+     damping=min(0.01_wp+0.99_wp*time/43200._wp,1.0_wp)  ! or 1.0_wp
+
      do i=1,mynobn
         n=my_in_obn(i)
         !SH q=i
         q=my_in_obn_idx(i)
-!!$OMP REDUCTION(+:ssh_rhs(n))
+!$OMP REDUCTION(+:ssh_rhs(n))
         do j=1,12
-           ssh_rhs(n) = ssh_rhs(n)+ampt(q,j)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(j)*3600._WP) - fazt(q,j))
+           ssh_rhs(n) = ssh_rhs(n)+damping*ampt(q,j)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(j)*3600._WP) - fazt(q,j))
         end do
      enddo
-!!$OMP END DO
-!!$OMP END PARALLEL
+!$OMP END DO
+!$OMP END PARALLEL
+!SH THIS BLOCK WAS USED FOR CHILE<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+!SH THIS BLOCK FOR PECHORA>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+!!$OMP PARALLEL PRIVATE(n,q)
+!!$OMP DO
+
+
+!!$  do i=1,mynobn
+!!$     n=my_in_obn(i)
+!!$
+!!$#ifdef USE_MPI
+!!$     q=my_in_obn_idx(i)
+!!$#else
+!!$     q=i
+!!$#endif
+
+!$OMP REDUCTION(+:ssh_rhs(n))
+         !aa67  do j=1,12
+         !aa67     ssh_rhs(n) = ssh_rhs(n)+amA*ampt(q,j)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(j)*3600._WP) - fazt(q,j))
+         !aa67  end do
+ !01062000  
+
+!!$     ssh_rhs(n) = ssh_rhs(n)+1.02247_WP*ampt(q,1)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(1)*3600._WP) - &
+!!$                                                      (fazt(q,1) + 134.70554_WP*rad))
+!!$     ssh_rhs(n) = ssh_rhs(n)+0.99888_WP*ampt(q,2)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(2)*3600._WP) - &
+!!$                                                      (fazt(q,2) + 0.10300_WP*rad))
+!!$     ssh_rhs(n) = ssh_rhs(n)+1.02068_WP*ampt(q,3)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(3)*3600._WP) - &
+!!$                                                      (fazt(q,3) + 6.08666_WP*rad))
+!!$     ssh_rhs(n) = ssh_rhs(n)+0.84982_WP*ampt(q,4)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(4)*3600._WP) - &
+!!$                                                      (fazt(q,4) + 544.68219_WP*rad))
+!!$     ssh_rhs(n) = ssh_rhs(n)+0.94275_WP*ampt(q,5)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(5)*3600._WP) - &
+!!$                                                      (fazt(q,5) + 2.02307_WP*rad))
+!!$     ssh_rhs(n) = ssh_rhs(n)+0.90830_WP*ampt(q,6)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(6)*3600._WP) - &
+!!$                                                      (fazt(q,6) - 223.46217_WP*rad))
+!!$     ssh_rhs(n) = ssh_rhs(n)+1.00730_WP*ampt(q,7)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(7)*3600._WP) - &
+!!$                                                      (fazt(q,7) - 370.55505_WP*rad))
+!!$     ssh_rhs(n) = ssh_rhs(n)+0.93628_WP*ampt(q,8)*cos(time_2D*2.0_WP*pi/(Harmonics_tf_period(8)*3600._WP) - &
+!!$                                                      (fazt(q,8) - 351.47742_WP*rad))
+!!$
+!!$  enddo
+
+!$OMP END DO
+!$OMP END PARALLEL
+!SH THIS BLOCK FOR PECHORA<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+!!$print *,'PECHORA : ',mype,n_dt,minval(ssh_rhs),maxval(ssh_rhs)
+
+!!$!Specific test
+!!$if (npes==72 .and. n_dt==867) then
+!!$ fid=22+mype
+!!$ if (mype==45) open(fid,file='obn_72_pe45')
+!!$ if (mype==46) open(fid,file='obn_72_pe46')
+!!$ if (mype==47) open(fid,file='obn_72_pe47')
+!!$ if (mype==48) open(fid,file='obn_72_pe48')
+!!$
+!!$ do k=1,mynobn
+!!$    n=my_in_obn(k)
+!!$    write (fID,*) n_dt,my_in_obn(k),my_in_obn_idx(k),ssh_rhs(n)
+!!$ end do
+!!$ close(fID)
+!!$end if
+!!$if (npes==36 .and. n_dt==867) then
+!!$ fid=22+mype
+!!$ if (mype==27) open(fid,file='obn_36_pe27')
+!!$ if (mype==28) open(fid,file='obn_36_pe28')
+!!$
+!!$ do k=1,mynobn
+!!$    n=my_in_obn(k)
+!!$    write (fID,*) n_dt,my_in_obn(k),my_in_obn_idx(k),ssh_rhs(n)
+!!$ end do
+!!$ close(fID)
+!!$end if
+
+
   endif
 
   ! IK, open boundary interpolated from external file
@@ -197,9 +306,9 @@
   endif
 
 !SH Check if the exchange is necessary!
-!!$#ifdef USE_MPI
-!!$  call exchange_nod(ssh_rhs)
-!!$#endif
+#ifdef USE_MPI
+  call exchange_nod(ssh_rhs)
+#endif
 
 !!SHDB print *,'compute_ssh_rhs_elem: ssh_rhs:',minval(ssh_rhs(:)),maxval(ssh_rhs(:))
 
@@ -232,6 +341,7 @@ SUBROUTINE update_2D_vel(step)
   real(kind=WP)    :: a_Cd, density0_inv, C_d2, C_d3, sqfv
 
 
+!!$print *,'SSH_RHS',step,minval(ssh_rhs(:)),maxval(ssh_rhs(:))
   call vel_gradients_2D(UAB)   !AA ! We need them only for biharmonic viscosity    !CHECKSH
                                !NROMP and for something else? It may not be skipped,
                                !NROMP even if filtering viscosity is used.
@@ -255,7 +365,7 @@ SUBROUTINE update_2D_vel(step)
 
   !if (T_potential) call potential           ! AA geopotential now computed in:   oce_timestep
 
-
+!!$print *,'SSH_RHS',step,minval(ssh_rhs(:)),maxval(ssh_rhs(:))
 !$OMP PARALLEL PRIVATE(n,density0_inv,el,dmean)
   if (Atm_pr == 1) then
 !$OMP DO
@@ -278,7 +388,7 @@ SUBROUTINE update_2D_vel(step)
      END DO
 !$OMP END DO
   endif
-
+!!$print *,'ETAETA',step,minval(eta(:)),maxval(eta(:))
   !++++++++++++++++++++++++++++++++++
   ! compute mask for wetting/drying
   !++++++++++++++++++++++++++++++++++
@@ -310,10 +420,12 @@ if (WET_DRY_ON) call wad_mask
   END DO
 !$OMP END DO
 !$OMP END PARALLEL
+!!$print *,'HUHU1',mype,step,minval(U_rhs_2D(2,:)),maxval(U_rhs_2D(2,:))
 
 #ifdef USE_MPI
   call exchange_elem(U_rhs_2D) !SH necessary??
 #endif
+
 
 
 !!$  print *,'U_rhs_2D : ',mype,minval(U_rhs_2D(1,:)),maxval(U_rhs_2D(1,:))
@@ -337,8 +449,8 @@ if (WET_DRY_ON) call wad_mask
   !endif
 
   If (filt_2D) call viscosity_filt_2D
-!SH SKIPPING FOR NOW  If (filt_bi_2D) call viscosity_filt2x_2D
-!SH SKIPPING FOR NOW  IF (bih_2D) call biharmonic_2D
+  If (filt_bi_2D) call viscosity_filt2x_2D
+  IF (bih_2D) call biharmonic_2D
 
 !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(elem,ff,dmean, friction,a_Cd,elnodes)
   !AA connection with 3D part of the model. If we compute only barotropic task 2D or 3D this is not needed.
@@ -474,10 +586,11 @@ subroutine energy(eout)
 
   integer          :: n, el, elnodes(4)
   real(kind=WP)  :: eout, eout_sum, fD(4), my_area, ttl_area
-  real(kind=WP), allocatable :: rbuffer(:), ekin(:)
+  !real(kind=WP), allocatable :: rbuffer(:), ekin(:)
+  real(kind=WP) :: rbuffer(elem2D), ekin(myDim_elem2D)
   integer :: ierror
 
-  allocate(rbuffer(elem2D), ekin(myDim_elem2D))
+  !allocate(rbuffer(elem2D), ekin(myDim_elem2D))
 
   print *,'ENERGY: ',minval(eta_n),maxval(eta_n)
 
@@ -533,9 +646,9 @@ print *,'mype, ttl_area= ',mype, my_area, ttl_area
 
 !VF, per unit area to whole area
 
-   eout=eout_sum/ttl_area    ! Energy for area
+   eout=eout_sum !/ttl_area    ! Energy for area
 
-deallocate(rbuffer, ekin)
+ !deallocate(rbuffer, ekin)
 
 end subroutine energy
 

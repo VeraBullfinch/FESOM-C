@@ -35,7 +35,7 @@ SUBROUTINE nc_init
   INTEGER                     :: VarId_temp			     ! variable: temperature
   INTEGER                     :: VarId_salt			     ! variable: salinity
 !!$    INTEGER                     :: VarId_tri_area		     ! variable: area
-!!$    INTEGER                     :: VarId_topo, VarId_index	     ! variables: topography, index
+  INTEGER                     :: VarId_topo, VarId_index	     ! variables: topography, index
 !!$    INTEGER                     :: VarId_arrival                     ! variable: arrival time
 !!$    INTEGER                     :: VarId_ttt                         ! variable: estimated arrival time ttt
 !!$    INTEGER                     :: VarId_mwh  			     ! variable: maximum wave height
@@ -242,10 +242,10 @@ SUBROUTINE nc_init
 !!$    s = s + 1
 !!$
 !!$
-!!$!----- topography
-!!$
-!!$    stat(s) = NF_DEF_VAR(fileid, 'topography', NF_FLOAT, 1, DimId_n2D,    VarId_topo) 
-!!$    s = s + 1
+!----- topography
+
+    stat(s) = NF_DEF_VAR(fileid, 'topography', NF_FLOAT, 1, DimId_n2D,    VarId_topo) 
+    s = s + 1
 
 !----- F I E L D S 
 
@@ -333,14 +333,14 @@ SUBROUTINE nc_init
     s = s + 1
     stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_ssh,      'positions',   17, 'surface_locations') 
     s = s + 1
-!!$    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'long_name',   10, 'topography') 
-!!$    s = s + 1
-!!$    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'field',       10, 'topography') 
-!!$    s = s + 1
-!!$    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'connections', 20, 'triangles, triangles') 
-!!$    s = s + 1
-!!$    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'positions',   17, 'surface_locations') 
-!!$    s = s + 1
+    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'long_name',   10, 'topography') 
+    s = s + 1
+    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'field',       10, 'topography') 
+    s = s + 1
+    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'connections', 20, 'triangles, triangles') 
+    s = s + 1
+    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'positions',   17, 'surface_locations') 
+    s = s + 1
 !!$    
 !!$    attstr  = 'meters (after shock bathymetry and topography)'
 !!$    stat(s) = NF_PUT_ATT_TEXT(fileid, VarId_topo,     'units',       LEN_TRIM(attstr), attstr) 
@@ -494,8 +494,8 @@ SUBROUTINE nc_init
     s = s + 1
 !!$    stat(s) = NF_PUT_VAR_REAL(fileid, VarId_tri_area, REAL(voltriangle(:),        4)) 
 !!$    s = s + 1
-!!$    stat(s) = NF_PUT_VAR_REAL(fileid, VarId_topo,     REAL(nodhn(:),              4)) 
-!!$    s = s + 1
+    stat(s) = NF_PUT_VAR_REAL(fileid, VarId_topo,     REAL(depth_glob(:),4)) 
+    s = s + 1
 !!$    stat(s) = NF_PUT_VAR_REAL(fileid, VarId_uplift,   REAL(ssh_init(:),           4)) 
 !!$    s = s + 1
 !!$    stat(s) =NF_PUT_VAR_INT(fileid,   VarId_index,    index_nod2D(:)) 

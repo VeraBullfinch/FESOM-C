@@ -39,7 +39,7 @@ real(kind=WP)                 :: K_hor=.010_WP
 real(kind=WP)                 :: A_ver=0.001_WP                   ! Vertical harm. visc.
 real(kind=WP)                 :: K_ver=0.00001_WP
 real(kind=WP)                 :: mix_coeff_PP=0.005_WP
-real(kind=WP)                 :: PR_num=0.01_WP          ! Prandtl number ratio of momentum diffusivity
+real(kind=WP)                 :: PR_num=0.001_WP          ! Prandtl number ratio of momentum diffusivity
                                                          ! SNS_BC: PR_num=0.001_WP  SNS, LE : PR_num=0.01_WP
 !logical, Parameter            :: laplacian=.true.       ! if .false. -----> biharmonic viscosity for 3D momentum eq.
  logical, parameter            :: i_vert_diff=.true.
@@ -52,7 +52,7 @@ real(kind=WP)                 :: PR_num=0.01_WP          ! Prandtl number ratio 
 !++++++++++++++++++++++++++++++++
  real(kind=WP)                 :: H_bpr_crit=3.0_WP      ! critical depth for compute BAROCLINIC PRESSURE GRADIENT = 1.0
  real(kind=WP)                 :: H_bpr_min=2.0_WP      ! befor this depth BAROCLINIC PRESSURE GRADIENT = 0.0 ! between this two value interpolation from 0 to 1
- logical, parameter          :: Mask_Bar_pr=.false.
+ logical, parameter          :: Mask_Bar_pr=.true.  !SH check this parameter (true for LE?)
 !++++++++++++++++++++++++++++++
 ! diffusion for 2D
 !++++++++++++++++++++++++++++++
@@ -125,7 +125,7 @@ logical                      :: ex_vert_visc, im_vert_visc, im_vert_visc_fic
 !  vertical mixing scheme
 !++++++++++++++++++++++++++++++
 integer                     :: ver_mix
-Real(kind=WP)               :: beta_scale=3.9_WP      ! 0<=beta_scale<=4  Cut off function for scale
+Real(kind=WP)               :: beta_scale=0.0_WP      ! 0<=beta_scale<=4  Cut off function for scale
                                                       ! LE: beta_scale=3.9  SNS: beta_scale=0.0
                                                       ! of turbulence profile. IF beta_scale=0 eq. Montgomery
 logical, parameter           :: charnock=.true.       ! used in the GOTM subroutine
@@ -307,7 +307,7 @@ character(LEN=80)                           ::   outdir
 
 !SH Some preliminary global fields
 real(kind=WP), allocatable, dimension(:,:) :: coord_nod2D_glob
-real(kind=WP), allocatable, dimension(:) :: eta_n_2_glob
+real(kind=WP), allocatable, dimension(:) :: eta_n_2_glob, depth_glob
 real(kind=WP), allocatable, dimension(:,:) :: TF_glob
 integer, allocatable, dimension(:,:)       ::   elem2D_nodes_glob
 integer, allocatable, dimension(:)       ::   index_nod2D_glob
